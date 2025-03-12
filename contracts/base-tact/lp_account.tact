@@ -48,8 +48,8 @@ contract LPAccount {
 
     receive(msg: AddLiquidity) {
         throwUnless(WRONG_OP, sender() != self.pool_address);
-        self.amount0 = self.amount0 + msg.new_amount0;
-        self.amount1 = self.amount1 + msg.new_amount1;
+        self.amount0 += msg.new_amount0;
+        self.amount1 += msg.new_amount1;
         if ((msg.min_lp_out > 0) && ((self.amount0 > 1000) && (self.amount1 > 1000))){
             message(MessageParameters {
                 to: self.pool_address,
@@ -75,7 +75,7 @@ contract LPAccount {
             to: self.pool_address,
             value: 0, 
             mode: SendRemainingValue,
-            bounce: false, // TODO
+            bounce: false,
             body: CbRefundMe {
                 query_id: msg.query_id,
                 amount0: self.amount0,
@@ -91,8 +91,8 @@ contract LPAccount {
     receive(msg: DirectAddLiquidity) {
         throwUnless(WRONG_OP, sender() != self.user_address);
 
-        self.amount0 = self.amount0 - msg.amount0;
-        self.amount1 = self.amount1 - msg.amount1;
+        self.amount0 -= msg.amount0;
+        self.amount1 -= msg.amount1;
         message(MessageParameters {
             to: self.pool_address,
             value: 0,

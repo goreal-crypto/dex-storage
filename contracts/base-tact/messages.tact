@@ -19,3 +19,20 @@ message CbAddLiquidity {
     min_lp_out: Int;
 }
 
+message RefundMe {
+    query_id: Int;
+}
+
+message CbRefundMe {
+    query_id: Int;
+    amount0: Int;
+    amount1: Int;
+    user_address: Address;
+}
+
+message DirectAddLiquidity {
+    query_id: Int;
+    amount0: Int;
+    amount1: Int;
+    min_lp_out: Int;
+}
