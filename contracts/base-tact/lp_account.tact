@@ -13,28 +13,56 @@ message CbAddLiquidity {
     min_lp_out: Int;
 }
 
+message RefundMe {
+    query_id: Int;
+}
+
+message CbRefundMe {
+    query_id: Int;
+    amount0: Int;
+    amount1: Int;
+    user_address: Address;
+}
+
+message DirectAddLiquidity {
+    query_id: Int;
+    amount0: Int;
+    amount1: Int;
+    min_lp_out: Int;
+}
+
+const WRONG_OP: Int = 0xffff;
+
 contract LPAccount {
     user_address: Address;
     pool_address: Address;
     amount0: Int;
     amount1: Int;
 
+    init(user_address: Address, pool_address: Address, amount0: Int, amount1: Int) {
+        self.user_address = user_address;
+        self.pool_address = pool_address;
+        self.amount0 = amount0;
+        self.amount1 = amount1;
+    }
+
     receive(msg: AddLiquidity) {
+        throwUnless(WRONG_OP, sender() != self.pool_address);
         self.amount0 = self.amount0 + msg.new_amount0;
         self.amount1 = self.amount1 + msg.new_amount1;
-        if (msg.min_lp_out && ((self.amount0 > 1000) && (self.amount1 > 1000))){
-            send(SendParameters{
+        if ((msg.min_lp_out > 0) && ((self.amount0 > 1000) && (self.amount1 > 1000))){
+            message(MessageParameters {
                 to: self.pool_address,
-                value: 0, // TODO
-                mode: SendRemainingValue, // TODO
-                bounce: false, // TODO
+                value: 0,
+                mode: SendRemainingBalance,
+                bounce: false,
                 body: CbAddLiquidity {
                     query_id: msg.query_id,
                     amount0: self.amount0,
                     amount1: self.amount1,
                     user_address: self.user_address,
                     min_lp_out: msg.min_lp_out
-                }
+                }.toCell()
             });
             self.amount0 = 0;
             self.amount1 = 0;
@@ -42,17 +70,18 @@ contract LPAccount {
     }
 
     receive(msg: RefundMe) {
-        send(SendParameters{
+        throwUnless(WRONG_OP, sender() != self.user_address);
+        message(MessageParameters {
             to: self.pool_address,
-            value: 0, // TODO
-            mode: SendRemainingValue, // TODO
+            value: 0, 
+            mode: SendRemainingValue,
             bounce: false, // TODO
             body: CbRefundMe {
                 query_id: msg.query_id,
                 amount0: self.amount0,
                 amount1: self.amount1,
-                user_address: user_address
-            }
+                user_address: self.user_address
+            }.toCell()
         });
 
         self.amount0 = 0;
@@ -60,19 +89,22 @@ contract LPAccount {
     }
 
     receive(msg: DirectAddLiquidity) {
-        self.amount0 = self.amount0 - msg.am0;
-        self.amount1 = self.amount1 - msg.am1;
-        send(SendParameters{
+        throwUnless(WRONG_OP, sender() != self.user_address);
+
+        self.amount0 = self.amount0 - msg.amount0;
+        self.amount1 = self.amount1 - msg.amount1;
+        message(MessageParameters {
             to: self.pool_address,
-            mode: SendRemainingValue, // TODO
-            bounce: false, // TODO
+            value: 0,
+            mode: SendRemainingValue,
+            bounce: false,
             body: CbAddLiquidity {
                 query_id: msg.query_id,
-                am0: msg.am0,
-                am1: msg.am1,
+                amount0: msg.amount0,
+                amount1: msg.amount1,
                 user_address: self.user_address,
                 min_lp_out: msg.min_lp_out,
-            }
+            }.toCell()
         });
     }
 }
