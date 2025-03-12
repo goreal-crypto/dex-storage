@@ -11,11 +11,39 @@ contract Wallet {
     jetton_wallet_code: Cell;
 
     receive(msg: Transfer) {
-        // TODO
+        self.balance = self.balance - msg.jetton_amount;
+        send(SendParameters{
+            to: ,
+            value: 0,
+            bounce: false, // TODO
+            mode: SendRemainingValue, // TODO
+            body: InternalTransfer {
+                query_id: msg.query_id,
+                jetton_amount: msg.jetton_amount,
+                owner_address: self.owner_address,
+                response_address: msg.response_address,
+                forward_ton_amount: msg.forward_ton_amount,
+                either_forward_payload: msg.either_forward_payload
+            }
+        });
     }
 
     receive(msg: InternalTransfer) {
-        // TODO
+        self.balance += msg.jetton_amount;
+        if (msg.forward_ton_amount) {
+            send(SendParameters{
+                to: self.owner_address,
+                value: 0,
+                bounce: false, // TODO
+                mode: SendRemainingValue, // TODO
+                body: TransferNotification {
+                    query_id: msg.query_id,
+                    jetton_amount: msg.jetton_amount,
+                    from_address: msg.from_address,
+                    either_forward_payload: msg.either_forward_payload
+                }
+            });
+        }
     }
 
     receive(msg: Burn) {
@@ -26,7 +54,10 @@ contract Wallet {
             bounce: false, // TODO
             mode: SendRemainingValue, // TODO
             body: BurnNotification {
-
+                query_id: msg.query_id,
+                jetton_amount: msg.jetton_amount,
+                owner_address: self.owner_address,
+                response_address: msg.response_address
             }
         });
     }

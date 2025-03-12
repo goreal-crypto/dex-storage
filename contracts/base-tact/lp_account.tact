@@ -42,10 +42,37 @@ contract LPAccount {
     }
 
     receive(msg: RefundMe) {
-        // TODO
+        send(SendParameters{
+            to: self.pool_address,
+            value: 0, // TODO
+            mode: SendRemainingValue, // TODO
+            bounce: false, // TODO
+            body: CbRefundMe {
+                query_id: msg.query_id,
+                amount0: self.amount0,
+                amount1: self.amount1,
+                user_address: user_address
+            }
+        });
+
+        self.amount0 = 0;
+        self.amount1 = 0;
     }
 
     receive(msg: DirectAddLiquidity) {
-        // TODO
+        self.amount0 = self.amount0 - msg.am0;
+        self.amount1 = self.amount1 - msg.am1;
+        send(SendParameters{
+            to: self.pool_address,
+            mode: SendRemainingValue, // TODO
+            bounce: false, // TODO
+            body: CbAddLiquidity {
+                query_id: msg.query_id,
+                am0: msg.am0,
+                am1: msg.am1,
+                user_address: self.user_address,
+                min_lp_out: msg.min_lp_out,
+            }
+        });
     }
 }

@@ -12,7 +12,5 @@ contract Router {
 
     receive(msg: TransferNotification) {
         // TODO
-    }
-
-    
+    }    
 }
