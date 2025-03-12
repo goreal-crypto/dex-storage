@@ -31,7 +31,9 @@ message DirectAddLiquidity {
     min_lp_out: Int;
 }
 
-const WRONG_OP: Int = 0xffff;
+const WRONG_OP: Int = 1234;
+const ZERO_OUTPUT: Int = 1235;
+const NO_LIQUIDITY: Int = 1236; 
 
 contract LPAccount {
     user_address: Address;
@@ -45,12 +47,14 @@ contract LPAccount {
         self.amount0 = amount0;
         self.amount1 = amount1;
     }
+    
+    receive(){}
 
     receive(msg: AddLiquidity) {
-        throwUnless(WRONG_OP, sender() != self.pool_address);
+        throwUnless(WRONG_OP, sender() == self.pool_address);
         self.amount0 += msg.new_amount0;
         self.amount1 += msg.new_amount1;
-        if ((msg.min_lp_out > 0) && ((self.amount0 > 1000) && (self.amount1 > 1000))){
+        if ((msg.min_lp_out > 0) && (self.amount0 > 1000) && (self.amount1 > 1000)){
             message(MessageParameters {
                 to: self.pool_address,
                 value: 0,
@@ -70,7 +74,8 @@ contract LPAccount {
     }
 
     receive(msg: RefundMe) {
-        throwUnless(WRONG_OP, sender() != self.user_address);
+        throwUnless(WRONG_OP, sender() == self.user_address);
+        throwUnless(NO_LIQUIDITY, (self.amount0 > 0) || (self.amount1 > 0));
         message(MessageParameters {
             to: self.pool_address,
             value: 0, 
@@ -89,10 +94,11 @@ contract LPAccount {
     }
 
     receive(msg: DirectAddLiquidity) {
-        throwUnless(WRONG_OP, sender() != self.user_address);
-
+        throwUnless(WRONG_OP, sender() == self.user_address);
+        throwUnless(ZERO_OUTPUT, (msg.min_lp_out > 0) && (self.amount0 > 1000) && (self.amount1 > 1000));
         self.amount0 -= msg.amount0;
         self.amount1 -= msg.amount1;
+        throwUnless(NO_LIQUIDITY, (self.amount0 >= 0) && (self.amount1 >= 0));
         message(MessageParameters {
             to: self.pool_address,
             value: 0,
@@ -107,4 +113,6 @@ contract LPAccount {
             }.toCell()
         });
     }
+
+    // receive(msg: ResetGas) {}
 }
