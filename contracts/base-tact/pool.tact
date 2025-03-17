@@ -1,3 +1,12 @@
+message BurnNotification {
+    query_id: Int;
+    jetton_amount: Int;
+    from_address: Address;
+    response_address: Address;
+}
+
+const ZERO_OUTPUT: Int = 1235;
+
 contract Pool {
     router_address: Address;
     lp_fee: Int;
@@ -11,15 +20,38 @@ contract Pool {
     protocol_fee_address: Address;
     reserve0: Int;
     reserve1: Int; 
-    jetton_lp_wallet_code: Cell;
-    lp_account_code: Cell;
+    // jetton_lp_wallet_code: Cell;
+    // lp_account_code: Cell;
 
     receive(msg: BurnNotification) {
+        // throwUnless(INSUFFICIENT_GAS, (msg_value > gas_required) & (msg_value > cs~load_coins() * 6));
+        // throwUnless(INVALID_CALLER, equal_slices(calculate_user_jetton_lp_wallet_address(from_address, my_address(), storage::jetton_lp_wallet_code), sender_address));
+        throwUnless(ZERO_OUTPUT, msg.jetton_amount > 0);
         let amount0_out = (msg.jetton_amount * self.reserve0) / self.total_supply_lp;
         let amount1_out = (msg.jetton_amount * self.reserve1) / self.total_supply_lp;
-        self.reserve0 = self.reserve0 - amount0_out;
-        self.reserve1 = self.reserve1 - amount1_out;
-        self.total_supply_lp = self.total_supply_lp - msg.jetton_amount;
+        throwUnless(ZERO_OUTPUT, (amount0_out > 0) && (amount1_out > 0));
+        self.reserve0 -= amount0_out;
+        self.reserve1 -= amount1_out;
+        self.total_supply_lp -= msg.jetton_amount;
+        
+        let gas = 0;
+        let mode = SendRemainingValue;
+        // TODO: send excesses
+
+        message(MessageParamaters{
+            to: self.router_address,
+            value: gas,
+            mode: mode,
+            bounce: false,
+            body: PayTo{
+                query_id: msg.query_id,
+                to_address: msg.from_address,
+                amount0: amount0_out,
+                token0_address: self.token0_address,
+                amount1: amount1_out,
+                token1_address: self.token1_address,
+            }.toCell()
+        });
     }
 
     receive(msg: CbAddLiquidity) {
@@ -27,21 +59,21 @@ contract Pool {
         let to = "";
 
         if (self.total_supply_lp == 0) {
-            liquidity = sqrt(msg.tot_am0 * self.total_supply_lp) / self.reserve0;
-            to = addr_node()
+            liquidity = sqrt(msg.amount0 * msg.amount1) / self.reserve0;
+            to = addr_none() // TODO
         } else {
-            let to_mint0 = (tot_am0 * self.total_supply_lp) / self.reserve0;
-            let to_mint1 = (tot_am1 * self.total_supply_lp) / self.reserve1;
+            let to_mint0 = (msg.amount0 * self.total_supply_lp) / self.reserve0;
+            let to_mint1 = (msg.amount1 * self.total_supply_lp) / self.reserve1;
             liquidity = min(to_mint0, to_mint1);
 
             to = user_address;
         }
 
-        self.reserve0 = self.reserve0 + tot_am0;
-        self.reserve1 = self.reserve1 + tot_am1;
-        self.total_supply_lp = self.total_supply_lp + liquidity;
+        self.reserve0 += msg.amount0;
+        self.reserve1 += msg.amount1;
+        self.total_supply_lp += liquidity;
 
-        if ((liquidity < msg.min_lp_out) | ((self.reserve0 > MAX_COINS) | (self.reserve1 > MAX_COINS))) {
+        if ((liquidity < msg.min_lp_out) || ((self.reserve0 > MAX_COINS) || (self.reserve1 > MAX_COINS))) {
             send(SendParameters{
                 to: // ?,
                 value: 0,
@@ -49,16 +81,32 @@ contract Pool {
                 mode: SendRemainingValue,
                 body: AddLiquidity {
                     query_id: msg.query_id,
-                    tot_am0: tot_am0,
-                    tot_am1: tot_am1,
-                    // 0
-                }
+                    new_amount0: tot_am0,
+                    new_amount1: tot_am1,
+                    min_lp_out: 0
+                }.toCell()
             });
+        } else {
+
         }
     }
 
     receive(msg: CbRefundMe) {
         // call_pay_to(0, CARRY_REMAINING_GAS, query_id, user_address, refund_ok, tot_am0, tot_am1);
+        message(MessageParamaters{
+            to: self.router_address,
+            value: 0,
+            mode: SendRemainingValue,
+            bounce: false,
+            body: PayTo{
+                query_id: msg.query_id,
+                to_address: msg.user_address,
+                amount0: amount0_out,
+                token0_address: self.token0_address,
+                amount1: amount1_out,
+                token1_address: self.token1_address,
+            }.toCell()
+        });
     }
 
     receive(msg: CollectFees) {
@@ -68,8 +116,24 @@ contract Pool {
         // call_pay_to(gas * 3, NORMAL, query_id, storage::protocol_fee_address, 0, storage::collected_token0_protocol_fee, storage::collected_token1_protocol_fee); ;; revert if fails
         // call_pay_to(gas, IGNORE_ERRORS, query_id, sender_address, 0, reward0, reward1);
 
-        self.collected_token0_protocol_fee = self.collected_token0_protocol_fee - reward0;
-        self.collected_token1_protocol_fee = self.collected_token0_protocol_fee = reward1;
+        self.collected_token0_protocol_fee -= reward0;
+        self.collected_token1_protocol_fee -= reward1;
+
+    }
+
+    receive(msg: Swap) {
+
+    }
+
+    receive(msg: ProvideLP) {
+
+    }
+
+    receive(msg: ResetGas) {
+
+    }
+
+    receive(msg: SetFees) {
 
     }
 }
