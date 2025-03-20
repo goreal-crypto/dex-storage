@@ -1,0 +1,125 @@
+import { Blockchain, internal, printTransactionFees, SandboxContract, TreasuryContract } from '@ton/sandbox';
+import { beginCell, Builder, toNano } from '@ton/core';
+import '@ton/test-utils';
+import { Router } from '../wrappers/Router';
+import { Pool } from '../wrappers/Pool';
+import { PayTo } from '../wrappers/Router';
+
+
+describe('Router', () => {
+    let blockchain: Blockchain;
+    let user: SandboxContract<TreasuryContract>;
+    let router: SandboxContract<Router>;
+    let pool: SandboxContract<Pool>;
+    let token0: SandboxContract<TreasuryContract>;
+    let token1: SandboxContract<TreasuryContract>;
+
+    beforeEach(async () => {
+        blockchain = await Blockchain.create();
+        user = await blockchain.treasury("user");
+        token0 = await blockchain.treasury("token0Address");
+        token1 = await blockchain.treasury("token1Address");
+        router = blockchain.openContract(await Router
+            .fromInit()
+        );
+        pool = blockchain.openContract(await Pool
+            .fromInit(token0.address, token1.address)
+        );
+        await pool.send(
+            user.getSender(),
+            {
+                value: toNano('1'),
+            }, 
+            null
+        )
+        await router.send(
+            user.getSender(),
+            {
+                value: toNano('1'),
+            }, 
+            null
+        )
+    });
+
+    it("should get a valid pool address", async () => {
+        const poolAddress = await router.getGetPoolAddress(
+            token0.address,
+            token1.address
+        );
+
+        expect(poolAddress).toEqualAddress(pool.address);
+    });
+
+    it("should refuse to pay if caller is not valid", async () => {
+        const send = await router.send(
+            user.getSender(),
+            {
+                value: toNano(1),
+            },
+            {
+                $$type: "PayTo",
+                queryId: toNano(1),
+                toAddress: user.address,
+                exitCode: toNano(0),
+                amount0Out: toNano(0),
+                token0Address: token0.address,
+                amount1Out: toNano(0),
+                token1Address: token1.address,
+            }
+        )
+
+        console.log("PayTo not from pool");
+        printTransactionFees(send.transactions);
+
+
+        expect(send.transactions).toHaveTransaction({
+            from: user.address,
+            to: router.address,
+            success: false,
+            exitCode: 1005
+        });
+    });
+
+    it("should pay if caller is valid", async () => {
+        const send = await blockchain.sendMessage(internal({
+            from: pool.address,
+            to: router.address,
+            value: toNano(1),
+            bounce: true,
+            body: beginCell()
+                    .storeUint(0xffffaaaa, 32) // opcode
+                    .storeUint(1n, 64) // queryId
+                    .storeAddress(user.address) // toAddress
+                    .storeUint(0n, 32) // exitCode
+                    .storeCoins(100n) // amount0Out
+                    .storeAddress(token0.address) // token0Address
+                    .storeCoins(200n) // amount1Out
+                    .storeRef(new Builder()
+                        .storeAddress(token1.address) // token1Address
+                        .endCell())
+                    .endCell()
+        }));
+
+        console.log("PayTo from pool");
+        printTransactionFees(send.transactions);
+        
+
+        expect(send.transactions).toHaveTransaction({
+            from: pool.address,
+            to: router.address,
+            success: true,
+        });
+        expect(send.transactions).toHaveTransaction({
+            from: router.address,
+            to: token0.address,
+            success: true,
+        });
+        expect(send.transactions).toHaveTransaction({
+            from: router.address,
+            to: token1.address,
+            success: true,
+        });
+    });
+
+    
+});

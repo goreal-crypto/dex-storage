@@ -31,19 +31,19 @@ message DirectAddLiquidity {
     min_lp_out: Int;
 }
 
-const WRONG_OP: Int = 1234;
-const ZERO_OUTPUT: Int = 1235;
-const NO_LIQUIDITY: Int = 1236; 
+const WRONG_OP: Int = 1001;
+const ZERO_OUTPUT: Int = 1002;
+const NO_LIQUIDITY: Int = 1003; 
 
 contract LPAccount {
     user_address: Address;
-    pool_address: Address;
+    poolAddress: Address;
     amount0: Int;
     amount1: Int;
 
-    init(user_address: Address, pool_address: Address, amount0: Int, amount1: Int) {
+    init(user_address: Address, poolAddress: Address, amount0: Int, amount1: Int) {
         self.user_address = user_address;
-        self.pool_address = pool_address;
+        self.poolAddress = poolAddress;
         self.amount0 = amount0;
         self.amount1 = amount1;
     }
@@ -51,12 +51,12 @@ contract LPAccount {
     receive(){}
 
     receive(msg: AddLiquidity) {
-        throwUnless(WRONG_OP, sender() == self.pool_address);
+        throwUnless(WRONG_OP, sender() == self.poolAddress);
         self.amount0 += msg.new_amount0;
         self.amount1 += msg.new_amount1;
         if ((msg.min_lp_out > 0) && (self.amount0 > 1000) && (self.amount1 > 1000)){
             message(MessageParameters {
-                to: self.pool_address,
+                to: self.poolAddress,
                 value: 0,
                 mode: SendRemainingBalance,
                 bounce: false,
@@ -77,7 +77,7 @@ contract LPAccount {
         throwUnless(WRONG_OP, sender() == self.user_address);
         throwUnless(NO_LIQUIDITY, (self.amount0 > 0) || (self.amount1 > 0));
         message(MessageParameters {
-            to: self.pool_address,
+            to: self.poolAddress,
             value: 0, 
             mode: SendRemainingValue,
             bounce: false,
@@ -100,7 +100,7 @@ contract LPAccount {
         self.amount1 -= msg.amount1;
         throwUnless(NO_LIQUIDITY, (self.amount0 >= 0) && (self.amount1 >= 0));
         message(MessageParameters {
-            to: self.pool_address,
+            to: self.poolAddress,
             value: 0,
             mode: SendRemainingValue,
             bounce: false,
