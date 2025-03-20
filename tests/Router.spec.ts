@@ -121,5 +121,39 @@ describe('Router', () => {
         });
     });
 
-    
+    it("should route swap message", async () =>{
+        const send = await router.send(
+            token0.getSender(),
+            {
+                value: toNano(1),
+            },
+            {
+                $$type: "JettonNotification",
+                queryId: toNano(1),
+                amount: toNano(1),
+                sender: user.address,
+                forwardPayload: beginCell()
+                    .storeUint(0xafafafaf, 32) // opcode
+                    .storeAddress(token1.address)
+                    .storeAddress(user.address)
+                    .storeCoins(0)
+                    // .storeBit(0)
+                    // .storeAddress(null)
+                    .asSlice()
+            }
+        );
+        console.log("should route swap message:");
+        printTransactionFees(send.transactions);
+        expect(send.transactions).toHaveTransaction({
+            from: token0.address,
+            to: router.address,
+            success: true,
+        });
+        expect(send.transactions).toHaveTransaction({
+            from: router.address,
+            to: pool.address,
+            success: true,
+        });
+
+    });
 });
