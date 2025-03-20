@@ -27,12 +27,19 @@ message(0x7362d09c) JettonNotification {
     forwardPayload: Slice as remaining;
 }
 
-message(0xaaaaffff) Swap {
-    token1Address: Address;
-    expectedOutput: Int as coins;
+const swap: Int = 0xafafafaf;
+const provide_lp: Int = 0xfafafafa;
+
+
+
+
+struct SwapPayload {
+    a: Int as uint32;
+    b: Address;
     toAddress: Address;
-    ref: Bool;
-    refAddress: Address?;
+    minOutput: Int as coins;
+    // hasRef: Bool;
+    // refAddress: Address?;
 }
 
 const INSUFFICIENT_GAS: Int = 1004;
@@ -63,7 +70,7 @@ inline fun getPoolAddress(token0Address: Address, token1Address: Address): Addre
 
 
 contract Router {
-    // is_locked: Bool;
+    // isLocked: Bool;
     // admin_address: Address;
     // jetton_lp_wallet_code: Cell; 
     // pool_code: Cell;
@@ -121,78 +128,88 @@ contract Router {
         }
     }
 
-    // receive(msg: JettonNotification) {
-    //     throwUnless(INVALID_AMOUNT, msg.amount > 0);
-    //     let payload: Slice = msg.forwardPayload;
-    //     let opcode = payload.loadUint(32);
-    //     let token1Address = payload.loadAddress()
-    //     let ctx = context();
-    //     let fwdFee = ctx.readForwardFee();
-    //     if ((fwdFee * 6 > ctx.value) || token1Address == ctx.sender || self.isLocked) {
-    //         let exitCode: Slice as remaining = "";
-    //         if (self.isLocked) {
-    //             exitCode = transfer_bounce_locked;
-    //         } else {
-    //             exitCode = transfer_bounce_invalid_request;
-    //         }
-    //         message(MessageParameters{
-    //             to: ctx.sender,
-    //             value: 0,
-    //             mode: SendRemainingValue,
-    //             bounce: false,
-    //             body: JettonTransfer {
-    //                 queryId: msg.queryId,
-    //                 amount: msg.amount,
-    //                 destination: ctx.sender,
-    //                 responseDestination: ctx.sender,
-    //                 customPayload: 0, // .store_uint(0, 1);
-    //                 forwardTonAmount: 0,
-    //                 forwardPayload: exitCode, // .store_uint(0, 1);
-    //             }.toCell()
-    //         });
-    //     } else {
-    //         if (opcode == swap) {
-    //             let transferredMsg: Swap = Swap.fromSlice(payload);
-    //             let poolAddress: Address = getPoolAddress(ctx.sender, token1Address);
-    //             let ref = beginCell().storeAddress(msg.sender);
-    //             if (transferredMsg.has_ref) {
-    //                 ref = ref.storeAddress(transferredMsg.ref_address);
-    //             }
-    //             message(MessageParamaters{
-    //                 to: poolAddress,
-    //                 value: 0,
-    //                 mode: SendRemainingValue,
-    //                 bounce: false,
-    //                 body: Swap {
-    //                     queryId: msg.queryId,
-    //                     toAddress: transferredMsg.toAddress,
-    //                     senderAddress: ctx.sender,
-    //                     jetton_amount: msg.amount,
-    //                     min_out: transferredMsg.min_out,
-    //                     has_ref: transferredMsg.has_ref,
-    //                     ref: ref.endCell()
-    //                 }.toCell()
-    //             });
-    //         }
-            // } else if (opcode == provide_lp) {
-            //     let transferredMsg: ProvideLP = ProvideLP.fromSlice(payload);
-            //     let poolAddress = getPoolAddress(ctx.sender, token1Address);
-            //     message(MessageParameters{
-            //         to: poolAddress,
-            //         value: 0,
-            //         mode: SendRemainingValue,
-            //         bounce: false,
-            //         body: ProvideLP {
-            //             queryId: msg.queryId,
-            //             from_user: msg.sender,
-            //             min_lp_out: transferredMsg.min_lp_out,
-            //             amount0: msg.amount, 
-            //             amount1: 0
-            //         }.toCell()
-            //     });    
+    receive(msg: JettonNotification) {
+        throwUnless(INVALID_AMOUNT, msg.amount > 0);
+        let payload: Slice = msg.forwardPayload;
+        let opcode: Int = payload.loadUint(32);
+        let token1Address: Address = payload.loadAddress();
+        let ctx: Context = context();
+        let fwdFee = ctx.readForwardFee();
+        if ((fwdFee * 6 > ctx.value) || token1Address == ctx.sender) { // || self.isLocked) {
+            // let exitCode: Slice as remaining = "";
+            // if (self.isLocked) {
+            //     exitCode = transfer_bounce_locked;
+            // } else {
+            //     exitCode = transfer_bounce_invalid_request;
             // }
-    //     }
-    // }  
+            message(MessageParameters{
+                to: ctx.sender,
+                value: 0,
+                mode: SendRemainingValue,
+                bounce: false,
+                body: JettonTransfer {
+                    queryId: msg.queryId,
+                    amount: msg.amount,
+                    destination: ctx.sender,
+                    responseDestination: ctx.sender,
+                    customPayload: null, // .store_uint(0, 1);
+                    forwardTonAmount: 0,
+                    forwardPayload: emptySlice(), // .store_uint(0, 1);
+                }.toCell()
+            });
+        } else {
+            if (opcode == swap) {
+                dump("huy");
+                let ppayload = msg.forwardPayload;
+                let oopcode = ppayload.loadUint(32);
+                dump("???");
+                dump(oopcode);
+                let ttokenWallet = ppayload.loadAddress();
+                dump(ttokenWallet);
+                let toAddress = ppayload.loadAddress();
+                dump(toAddress);
+                let minOutput = ppayload.loadCoins();   
+                dump(minOutput);
+                
+                // let swapPayload: SwapPayload = SwapPayload.fromSlice(msg.forwardPayload);
+                let poolAddress: Address = getPoolAddress(ctx.sender, token1Address);
+                // if (swapPayload.hasRef) {
+                //     swapPayload.refAddress = msg.sender;
+                // }
+                message(MessageParameters{
+                    to: poolAddress,
+                    value: 0,
+                    mode: SendRemainingValue,
+                    bounce: false,
+                    body: Swap {
+                        queryId: msg.queryId,
+                        fromAddress: toAddress, // swapPayload.toAddress,
+                        tokenWallet: ctx.sender,
+                        jettonAmount: msg.amount,
+                        minOutput: minOutput, // swapPayload.minOutput,
+                        // hasRef: swapPayload.hasRef,
+                        // refAddress: swapPayload.refAddress
+                    }.toCell()
+                });
+            } else if (opcode == provide_lp) {
+                // let transferredMsg: ProvideLP = ProvideLP.fromSlice(payload);
+                // let poolAddress = getPoolAddress(ctx.sender, token1Address);
+                // message(MessageParameters{
+                //     to: poolAddress,
+                //     value: 0,
+                //     mode: SendRemainingValue,
+                //     bounce: false,
+                //     body: ProvideLP {
+                //         queryId: msg.queryId,
+                //         from_user: msg.sender,
+                //         min_lp_out: transferredMsg.min_lp_out,
+                //         amount0: msg.amount, 
+                //         amount1: 0
+                //     }.toCell()
+                // });    
+            }
+        }
+    }  
 
     get fun getPoolAddress(token0Address: Address, token1Address: Address): Address {
         return getPoolAddress(token0Address, token1Address)

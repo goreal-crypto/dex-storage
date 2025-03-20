@@ -1,3 +1,13 @@
+message(0xaaaaffff) Swap {
+    queryId: Int as uint64;
+    fromAddress: Address;
+    tokenWallet: Address;
+    jettonAmount: Int as coins;
+    minOutput: Int as coins;
+    // hasRef: Bool;
+    // refAddress: Address?;
+}
+
 message BurnNotification {
     query_id: Int;
     jetton_amount: Int;
@@ -27,7 +37,7 @@ contract Pool {
         self.token0Address = token0Address;
         self.token1Address = token1Address;
     }
-    
+
     receive(){}
 
 //     receive(msg: BurnNotification) {
@@ -129,9 +139,9 @@ contract Pool {
 
 //     }
 
-//     receive(msg: Swap) {
+    receive(msg: Swap) {
 
-//     }
+    }
 
 //     receive(msg: ProvideLP) {
 
