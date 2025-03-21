@@ -1,34 +1,34 @@
-message AddLiquidity {
-    query_id: Int;
-    new_amount0: Int;
-    new_amount1: Int;
-    min_lp_out: Int;
+message(0xaaaaaaaa) AddLiquidity {
+    queryId: Int;
+    newAmount0: Int;
+    newAmount1: Int;
+    minLPOut: Int;
 }
 
 message CbAddLiquidity {
-    query_id: Int;
+    queryId: Int;
     amount0: Int;
     amount1: Int;
-    user_address: Address;
-    min_lp_out: Int;
+    userAddress: Address;
+    minLPOut: Int;
 }
 
 message RefundMe {
-    query_id: Int;
+    queryId: Int;
 }
 
 message CbRefundMe {
-    query_id: Int;
+    queryId: Int;
     amount0: Int;
     amount1: Int;
-    user_address: Address;
+    userAddress: Address;
 }
 
 message DirectAddLiquidity {
-    query_id: Int;
+    queryId: Int;
     amount0: Int;
     amount1: Int;
-    min_lp_out: Int;
+    minLPOut: Int;
 }
 
 const WRONG_OP: Int = 1001;
@@ -36,13 +36,13 @@ const ZERO_OUTPUT: Int = 1002;
 const NO_LIQUIDITY: Int = 1003; 
 
 contract LPAccount {
-    user_address: Address;
+    userAddress: Address;
     poolAddress: Address;
     amount0: Int;
     amount1: Int;
 
-    init(user_address: Address, poolAddress: Address, amount0: Int, amount1: Int) {
-        self.user_address = user_address;
+    init(userAddress: Address, poolAddress: Address, amount0: Int, amount1: Int) {
+        self.userAddress = userAddress;
         self.poolAddress = poolAddress;
         self.amount0 = amount0;
         self.amount1 = amount1;
@@ -52,20 +52,20 @@ contract LPAccount {
 
     receive(msg: AddLiquidity) {
         throwUnless(WRONG_OP, sender() == self.poolAddress);
-        self.amount0 += msg.new_amount0;
-        self.amount1 += msg.new_amount1;
-        if ((msg.min_lp_out > 0) && (self.amount0 > 1000) && (self.amount1 > 1000)){
+        self.amount0 += msg.newAmount0;
+        self.amount1 += msg.newAmount1;
+        if ((msg.minLPOut > 0) && (self.amount0 > 1000) && (self.amount1 > 1000)){
             message(MessageParameters {
                 to: self.poolAddress,
                 value: 0,
                 mode: SendRemainingBalance,
                 bounce: false,
                 body: CbAddLiquidity {
-                    query_id: msg.query_id,
+                    queryId: msg.queryId,
                     amount0: self.amount0,
                     amount1: self.amount1,
-                    user_address: self.user_address,
-                    min_lp_out: msg.min_lp_out
+                    userAddress: self.userAddress,
+                    minLPOut: msg.minLPOut
                 }.toCell()
             });
             self.amount0 = 0;
@@ -74,7 +74,7 @@ contract LPAccount {
     }
 
     receive(msg: RefundMe) {
-        throwUnless(WRONG_OP, sender() == self.user_address);
+        throwUnless(WRONG_OP, sender() == self.userAddress);
         throwUnless(NO_LIQUIDITY, (self.amount0 > 0) || (self.amount1 > 0));
         message(MessageParameters {
             to: self.poolAddress,
@@ -82,10 +82,10 @@ contract LPAccount {
             mode: SendRemainingValue,
             bounce: false,
             body: CbRefundMe {
-                query_id: msg.query_id,
+                queryId: msg.queryId,
                 amount0: self.amount0,
                 amount1: self.amount1,
-                user_address: self.user_address
+                userAddress: self.userAddress
             }.toCell()
         });
 
@@ -94,8 +94,8 @@ contract LPAccount {
     }
 
     receive(msg: DirectAddLiquidity) {
-        throwUnless(WRONG_OP, sender() == self.user_address);
-        throwUnless(ZERO_OUTPUT, (msg.min_lp_out > 0) && (self.amount0 > 1000) && (self.amount1 > 1000));
+        throwUnless(WRONG_OP, sender() == self.userAddress);
+        throwUnless(ZERO_OUTPUT, (msg.minLPOut > 0) && (self.amount0 > 1000) && (self.amount1 > 1000));
         self.amount0 -= msg.amount0;
         self.amount1 -= msg.amount1;
         throwUnless(NO_LIQUIDITY, (self.amount0 >= 0) && (self.amount1 >= 0));
@@ -105,11 +105,11 @@ contract LPAccount {
             mode: SendRemainingValue,
             bounce: false,
             body: CbAddLiquidity {
-                query_id: msg.query_id,
+                queryId: msg.queryId,
                 amount0: msg.amount0,
                 amount1: msg.amount1,
-                user_address: self.user_address,
-                min_lp_out: msg.min_lp_out,
+                userAddress: self.userAddress,
+                minLPOut: msg.minLPOut,
             }.toCell()
         });
     }

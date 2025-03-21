@@ -52,7 +52,7 @@ const INVALID_AMOUNT: Int = 1006;
 // TODO
 inline fun getPoolStateInit(token0Address: Address, token1Address: Address): StateInit {
     return initOf Pool(
-        // myAddress(), // router_address
+        myAddress(), // routerAddress
         // 0,           // lp_fee
         // 0,           // ref_fee
         token0Address, // token0Address
@@ -181,7 +181,7 @@ contract Router {
                         jettonAmount: msg.amount,
                         minOutput: minOutput, // swapPayload.minOutput,
                         // hasRef: swapPayload.hasRef,
-                        // refAddress: swapPayload.refAddress
+                        // refAddress: msg.sender
                     }.toCell()
                 });
             } else if (opcode == provide_lp) {
@@ -195,6 +195,7 @@ contract Router {
                     bounce: false,
                     body: ProvideLP {
                         queryId: msg.queryId,
+                        fromAddress: msg.sender,
                         minLPOut: minLPOut,
                         amount0: msg.amount, // 0
                         amount1: 0 // msg.amount

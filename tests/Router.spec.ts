@@ -23,7 +23,7 @@ describe('Router', () => {
             .fromInit()
         );
         pool = blockchain.openContract(await Pool
-            .fromInit(token0.address, token1.address)
+            .fromInit(router.address, token0.address, token1.address)
         );
         await pool.send(
             user.getSender(),

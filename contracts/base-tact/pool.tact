@@ -1,3 +1,5 @@
+import "./lp_account";
+
 message(0xaaaaffff) Swap {
     queryId: Int as uint64;
     fromAddress: Address;
@@ -10,6 +12,7 @@ message(0xaaaaffff) Swap {
 
 message(0xabababab) ProvideLP {
     queryId: Int as uint64;
+    fromUser: Address;
     minLPOut: Int as coins;
     amount0: Int as coins;
     amount1: Int as coins; 
@@ -22,10 +25,23 @@ message BurnNotification {
     response_address: Address;
 }
 
-const ZERO_OUTPUT: Int = 1235;
+const WRONG_CALLER: Int = 2003;
+
+inline fun getLPAccountStateInit(userAddress: Address, poolAddress: Address): StateInit {
+    return initOf LPAccount(
+        userAddress,
+        poolAddress,
+        0,
+        0
+    );
+}
+
+inline fun getLPAccountAddress(userAddress: Address, poolAddress: Address): Address {
+    return contractAddress(getLPAccountStateInit(userAddress, poolAddress));
+}
 
 contract Pool {
-    // router_address: Address;
+    routerAddress: Address;
     // lp_fee: Int;
     // protocol_fee: Int;
     // ref_fee: Int;
@@ -40,14 +56,15 @@ contract Pool {
     // // jetton_lp_wallet_code: Cell;
     // // lp_account_code: Cell;
 
-    init(token0Address: Address, token1Address: Address) {
+    init(routerAddress: Address, token0Address: Address, token1Address: Address) {
+        self.routerAddress = routerAddress;
         self.token0Address = token0Address;
         self.token1Address = token1Address;
     }
 
     receive(){}
 
-//     receive(msg: BurnNotification) {
+    // receive(msg: BurnNotification) {
 //         // throwUnless(INSUFFICIENT_GAS, (msg_value > gas_required) & (msg_value > cs~load_coins() * 6));
 //         // throwUnless(INVALID_CALLER, equal_slices(calculate_user_jetton_lp_wallet_address(from_address, my_address(), storage::jetton_lp_wallet_code), sender_address));
 //         throwUnless(ZERO_OUTPUT, msg.jetton_amount > 0);
@@ -147,11 +164,25 @@ contract Pool {
 //     }
 
     receive(msg: Swap) {
-
+        throwUnless(WRONG_CALLER, sender() == self.routerAddress);
+        
     }
 
     receive(msg: ProvideLP) {
-
+        throwUnless(WRONG_CALLER, sender() == self.routerAddress);
+        let lpAccountAddress: Address = getLPAccountAddress(msg.fromUser, myAddress());
+        message(MessageParameters{
+            to: lpAccountAddress,
+            value: 0,
+            mode: SendRemainingValue,
+            bounce: false,
+            body: AddLiquidity{
+                queryId: msg.queryId,
+                newAmount0: msg.amount0,
+                newAmount1: msg.amount1,
+                minLPOut: msg.minLPOut
+            }.toCell()
+        }); 
     }
 
 //     receive(msg: ResetGas) {

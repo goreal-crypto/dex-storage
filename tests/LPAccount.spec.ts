@@ -32,13 +32,13 @@ describe('LPAccount', () => {
             },
             {
                 $$type: "AddLiquidity",
-                query_id: toNano(1),
-                new_amount0: toNano(1),
-                new_amount1: toNano(0),
-                min_lp_out: toNano(1),
+                queryId: toNano(1),
+                newAmount0: toNano(1),
+                newAmount1: toNano(0),
+                minLPOut: toNano(1),
             }
         );
-
+        console.log(1);
         printTransactionFees(sendWrongSender.transactions);
         expect(sendWrongSender.transactions).toHaveTransaction({
             from: wrongSender.address,
@@ -53,12 +53,13 @@ describe('LPAccount', () => {
             },
             {
                 $$type: "AddLiquidity",
-                query_id: toNano(1),
-                new_amount0: toNano(1),
-                new_amount1: toNano(0),
-                min_lp_out: toNano(1),
+                queryId: toNano(1),
+                newAmount0: toNano(1),
+                newAmount1: toNano(0),
+                minLPOut: toNano(1),
             }
         );
+        console.log(2);
 
         printTransactionFees(send.transactions);
         expect(send.transactions).toHaveTransaction({
@@ -74,12 +75,13 @@ describe('LPAccount', () => {
             },
             {
                 $$type: "AddLiquidity",
-                query_id: toNano(1),
-                new_amount0: toNano(0),
-                new_amount1: toNano(10),
-                min_lp_out: toNano(1),
+                queryId: toNano(1),
+                newAmount0: toNano(0),
+                newAmount1: toNano(10),
+                minLPOut: toNano(1),
             }
         );
+        console.log(3);
 
         printTransactionFees(sendCB.transactions);
         expect(sendCB.transactions).toHaveTransaction({
@@ -95,12 +97,13 @@ describe('LPAccount', () => {
             },
             {
                 $$type: "AddLiquidity",
-                query_id: toNano(1),
-                new_amount0: toNano(0),
-                new_amount1: toNano(10),
-                min_lp_out: toNano(0),
+                queryId: toNano(1),
+                newAmount0: toNano(0),
+                newAmount1: toNano(10),
+                minLPOut: toNano(0),
             }
         );
+        console.log(4);
 
         printTransactionFees(sendRefund.transactions);
         expect(sendRefund.transactions).toHaveTransaction({
@@ -120,12 +123,13 @@ describe('LPAccount', () => {
             },
             {
                 $$type: "DirectAddLiquidity",
-                query_id: toNano(1),
+                queryId: toNano(1),
                 amount0: toNano(1),
                 amount1: toNano(0),
-                min_lp_out: toNano(1),  
+                minLPOut: toNano(1),  
             }
         );
+        console.log(5);
 
         printTransactionFees(sendWrongSender.transactions);
         expect(sendWrongSender.transactions).toHaveTransaction({
@@ -141,12 +145,13 @@ describe('LPAccount', () => {
             },
             {
                 $$type: "DirectAddLiquidity",
-                query_id: toNano(1),
+                queryId: toNano(1),
                 amount0: toNano(1),
                 amount1: toNano(0),
-                min_lp_out: toNano(1),
+                minLPOut: toNano(1),
             }
         );
+        console.log(6);
 
         printTransactionFees(sendLowBalance.transactions);
         expect(sendLowBalance.transactions).toHaveTransaction({
@@ -162,10 +167,10 @@ describe('LPAccount', () => {
             },
             {
                 $$type: "AddLiquidity",
-                query_id: toNano(1),
-                new_amount0: toNano(10),
-                new_amount1: toNano(10),
-                min_lp_out: toNano(0),
+                queryId: toNano(1),
+                newAmount0: toNano(10),
+                newAmount1: toNano(10),
+                minLPOut: toNano(0),
             }
         );
 
@@ -176,12 +181,13 @@ describe('LPAccount', () => {
             },
             {
                 $$type: "DirectAddLiquidity",
-                query_id: toNano(1),
+                queryId: toNano(1),
                 amount0: toNano(1),
                 amount1: toNano(3),
-                min_lp_out: toNano(1),
+                minLPOut: toNano(1),
             }
         );
+        console.log(7);
 
         printTransactionFees(send.transactions);
         expect(send.transactions).toHaveTransaction({
@@ -200,9 +206,11 @@ describe('LPAccount', () => {
             },
             {
                 $$type: "RefundMe",
-                query_id: toNano(1), 
+                queryId: toNano(1), 
             }
         );
+        console.log(8);
+
         printTransactionFees(sendWrongSender.transactions);
         expect(sendWrongSender.transactions).toHaveTransaction({
             from: wrongSender.address,
@@ -217,9 +225,10 @@ describe('LPAccount', () => {
             },
             {
                 $$type: "RefundMe",
-                query_id: toNano(1),
+                queryId: toNano(1),
             }
         );
+        console.log(9);
 
         printTransactionFees(sendLowBalance.transactions);
         expect(sendLowBalance.transactions).toHaveTransaction({
@@ -235,10 +244,10 @@ describe('LPAccount', () => {
             },
             {
                 $$type: "AddLiquidity",
-                query_id: toNano(1),
-                new_amount0: toNano(10),
-                new_amount1: toNano(10),
-                min_lp_out: toNano(0),
+                queryId: toNano(1),
+                newAmount0: toNano(10),
+                newAmount1: toNano(10),
+                minLPOut: toNano(0),
             }
         );
 
@@ -249,9 +258,10 @@ describe('LPAccount', () => {
             },
             {
                 $$type: "RefundMe",
-                query_id: toNano(1),
+                queryId: toNano(1),
             }
         );
+        console.log(10);
 
         printTransactionFees(send.transactions);
         expect(send.transactions).toHaveTransaction({
