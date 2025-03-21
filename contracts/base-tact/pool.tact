@@ -8,6 +8,13 @@ message(0xaaaaffff) Swap {
     // refAddress: Address?;
 }
 
+message(0xabababab) ProvideLP {
+    queryId: Int as uint64;
+    minLPOut: Int as coins;
+    amount0: Int as coins;
+    amount1: Int as coins; 
+}
+
 message BurnNotification {
     query_id: Int;
     jetton_amount: Int;
@@ -143,9 +150,9 @@ contract Pool {
 
     }
 
-//     receive(msg: ProvideLP) {
+    receive(msg: ProvideLP) {
 
-//     }
+    }
 
 //     receive(msg: ResetGas) {
 

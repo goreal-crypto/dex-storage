@@ -10,6 +10,8 @@ message(0xffffaaaa) PayTo {
     token1Address: Address;
 }
 
+
+
 message(0xf8a7ea5) JettonTransfer {
     queryId: Int as uint64;
     amount: Int as coins;
@@ -33,14 +35,14 @@ const provide_lp: Int = 0xfafafafa;
 
 
 
-struct SwapPayload {
-    a: Int as uint32;
-    b: Address;
-    toAddress: Address;
-    minOutput: Int as coins;
-    // hasRef: Bool;
-    // refAddress: Address?;
-}
+// struct SwapPayload {
+//     a: Int as uint32;
+//     b: Address;
+//     toAddress: Address;
+//     minOutput: Int as coins;
+//     // hasRef: Bool;
+//     // refAddress: Address?;
+// }
 
 const INSUFFICIENT_GAS: Int = 1004;
 const INVALID_CALLER: Int = 1005;
@@ -159,23 +161,14 @@ contract Router {
             });
         } else {
             if (opcode == swap) {
-                dump("huy");
-                let ppayload = msg.forwardPayload;
-                let oopcode = ppayload.loadUint(32);
-                dump("???");
-                dump(oopcode);
-                let ttokenWallet = ppayload.loadAddress();
-                dump(ttokenWallet);
-                let toAddress = ppayload.loadAddress();
-                dump(toAddress);
-                let minOutput = ppayload.loadCoins();   
-                dump(minOutput);
-                
+                let toAddress = payload.loadAddress();
+                let minOutput = payload.loadCoins();   
                 // let swapPayload: SwapPayload = SwapPayload.fromSlice(msg.forwardPayload);
-                let poolAddress: Address = getPoolAddress(ctx.sender, token1Address);
                 // if (swapPayload.hasRef) {
                 //     swapPayload.refAddress = msg.sender;
                 // }
+
+                let poolAddress: Address = getPoolAddress(ctx.sender, token1Address);
                 message(MessageParameters{
                     to: poolAddress,
                     value: 0,
@@ -193,20 +186,20 @@ contract Router {
                 });
             } else if (opcode == provide_lp) {
                 // let transferredMsg: ProvideLP = ProvideLP.fromSlice(payload);
-                // let poolAddress = getPoolAddress(ctx.sender, token1Address);
-                // message(MessageParameters{
-                //     to: poolAddress,
-                //     value: 0,
-                //     mode: SendRemainingValue,
-                //     bounce: false,
-                //     body: ProvideLP {
-                //         queryId: msg.queryId,
-                //         from_user: msg.sender,
-                //         min_lp_out: transferredMsg.min_lp_out,
-                //         amount0: msg.amount, 
-                //         amount1: 0
-                //     }.toCell()
-                // });    
+                let minLPOut: Int = payload.loadCoins();
+                let poolAddress: Address = getPoolAddress(ctx.sender, token1Address);
+                message(MessageParameters{
+                    to: poolAddress,
+                    value: 0,
+                    mode: SendRemainingValue,
+                    bounce: false,
+                    body: ProvideLP {
+                        queryId: msg.queryId,
+                        minLPOut: minLPOut,
+                        amount0: msg.amount, // 0
+                        amount1: 0 // msg.amount
+                    }.toCell()
+                });    
             }
         }
     }  
