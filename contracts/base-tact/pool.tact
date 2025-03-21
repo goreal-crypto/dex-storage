@@ -26,6 +26,8 @@ message BurnNotification {
 }
 
 const WRONG_CALLER: Int = 2003;
+const swap_refund_no_liq: Int = 2004;
+
 
 inline fun getLPAccountStateInit(userAddress: Address, poolAddress: Address): StateInit {
     return initOf LPAccount(
@@ -47,19 +49,22 @@ contract Pool {
     // ref_fee: Int;
     token0Address: Address;
     token1Address: Address;
-    // total_supply_lp: Int; 
+    totalSupplyLP: Int as coins; 
     // collected_token0_protocol_fee: Int;
     // collected_token1_protocol_fee: Int; 
     // protocol_fee_address: Address;
-    // reserve0: Int;
-    // reserve1: Int; 
+    reserve0: Int as coins;
+    reserve1: Int as coins; 
     // // jetton_lp_wallet_code: Cell;
     // // lp_account_code: Cell;
 
-    init(routerAddress: Address, token0Address: Address, token1Address: Address) {
+    init(routerAddress: Address, token0Address: Address, token1Address: Address, reserve0: Int, reserve1: Int, totalSupplyLP: Int) {
         self.routerAddress = routerAddress;
         self.token0Address = token0Address;
         self.token1Address = token1Address;
+        self.reserve0 = reserve0;
+        self.reserve1 = reserve1;
+        self.totalSupplyLP = totalSupplyLP;
     }
 
     receive(){}
@@ -165,7 +170,112 @@ contract Pool {
 
     receive(msg: Swap) {
         throwUnless(WRONG_CALLER, sender() == self.routerAddress);
-        
+
+        let output: Int = 0;
+        let tmpAmount0: Int = 0;
+        let tmpAmount1: Int = 0;
+        if (tokenWallet == self.token0Address) {
+            output = getAmountOut(msg.jettonAmount, self.reserve0, self.reserve1);
+            tmpAmount0 = amount;
+        } else {
+            output = getAmountOut(msg.jettonAmount, self.reserve1, self.reserve0);
+            tmpAmount1 = amount;
+        }
+
+        if ((self.totalSupplyLP <= 0) || (output <= 0) || (minOutput >= output)) {
+            message(MessageParameters{
+                to: self.routerAddress,
+                value: 0,
+                mode: SendRemainingValue,
+                bounce: false,
+                body: PayTo{
+                    queryId: msg.queryId,
+                    toAddress: msg.fromAddress,
+                    exitCode: swap_refund_no_liq,
+                    amount0Out: tmpAmount0,
+                    token0Address: self.token0Address,
+                    amount1Out: tmpAmount1,
+                    token1Address: self.token1Address,
+                }.toCell()
+            });
+            return;
+        }
+
+        if (tmpAmount0 > 0) {
+            self.reserve0 += msg.jettonAmount;
+            self.reserve1 -= output;
+
+            if ((self.reserve0 > MAX_COINS) || (self.reserve1 <= 0)) {
+                message(MessageParameters{
+                    to: self.routerAddress,
+                    value: 0,
+                    mode: SendRemainingValue,
+                    bounce: false,
+                    body: PayTo{
+                        queryId: msg.queryId,
+                        toAddress: msg.fromAddress,
+                        exitCode: swap_refund_reserve_err,
+                        amount0Out: tmpAmount0,
+                        token0Address: self.token0Address,
+                        amount1Out: tmpAmount1,
+                        token1Address: self.token1Address,
+                    }.toCell()
+                });
+                return;
+            }
+            message(MessageParameters{
+                to: self.routerAddress,
+                value: 0,
+                mode: SendRemainingValue,
+                bounce: false,
+                body: PayTo{
+                    queryId: msg.queryId,
+                    toAddress: msg.fromAddress,
+                    exitCode: swap_ok,
+                    amount0Out: 0,
+                    token0Address: self.token0Address,
+                    amount1Out: output,
+                    token1Address: self.token1Address,
+                }.toCell()
+            });
+        } else {
+            self.reserve1 += msg.jettonAmount;
+            self.reserve0 -= output;
+
+            if ((self.reserve1 > MAX_COINS) || (self.reserve0 <= 0)) {
+                message(MessageParameters{
+                    to: self.routerAddress,
+                    value: 0,
+                    mode: SendRemainingValue,
+                    bounce: false,
+                    body: PayTo{
+                        queryId: msg.queryId,
+                        toAddress: msg.fromAddress,
+                        exitCode: swap_refund_reserve_err,
+                        amount0Out: tmpAmount0,
+                        token0Address: self.token0Address,
+                        amount1Out: tmpAmount1,
+                        token1Address: self.token1Address,
+                    }.toCell()
+                });
+                return;
+            }
+            message(MessageParameters{
+                to: self.routerAddress,
+                value: 0,
+                mode: SendRemainingValue,
+                bounce: false,
+                body: PayTo{
+                    queryId: msg.queryId,
+                    toAddress: msg.fromAddress,
+                    exitCode: swap_ok,
+                    amount0Out: output,
+                    token0Address: self.token0Address,
+                    amount1Out: 0,
+                    token1Address: self.token1Address,
+                }.toCell()
+            });
+        }
     }
 
     receive(msg: ProvideLP) {
