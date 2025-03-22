@@ -5,7 +5,7 @@ message(0xaaaaaaaa) AddLiquidity {
     minLPOut: Int;
 }
 
-message CbAddLiquidity {
+message(0xaaaaaaab) CbAddLiquidity {
     queryId: Int;
     amount0: Int;
     amount1: Int;
@@ -13,24 +13,23 @@ message CbAddLiquidity {
     minLPOut: Int;
 }
 
-message RefundMe {
+message(0xbbbbbbbb) RefundMe {
     queryId: Int;
 }
 
-message CbRefundMe {
+message(0xbbbbbbba) CbRefundMe {
     queryId: Int;
     amount0: Int;
     amount1: Int;
     userAddress: Address;
 }
 
-message DirectAddLiquidity {
+message(0xabcdabcd) DirectAddLiquidity {
     queryId: Int;
     amount0: Int;
     amount1: Int;
     minLPOut: Int;
 }
-
 
 message(0xaaaaffff) Swap {
     queryId: Int as uint64;
@@ -50,13 +49,6 @@ message(0xabababab) ProvideLP {
     amount1: Int as coins; 
 }
 
-message BurnNotification {
-    query_id: Int;
-    jetton_amount: Int;
-    from_address: Address;
-    response_address: Address;
-}
-
 message(0xffffaaaa) PayTo {
     queryId: Int as uint64;
     toAddress: Address;
@@ -66,7 +58,6 @@ message(0xffffaaaa) PayTo {
     amount1Out: Int as coins;
     token1Address: Address;
 }
-
 
 
 message(0xf8a7ea5) JettonTransfer {
@@ -79,11 +70,38 @@ message(0xf8a7ea5) JettonTransfer {
     forwardPayload: Slice as remaining;
 }
 
+message(0x178d4519) JettonTransferInternal {
+    queryId: Int as uint64;
+    amount: Int as coins;
+    sender: Address;
+    responseDestination: Address?;
+    forwardTonAmount: Int as coins;
+    forwardPayload: Slice as remaining;
+}
+
 message(0x7362d09c) JettonNotification {
     queryId: Int as uint64;
     amount: Int as coins;
     sender: Address;
     forwardPayload: Slice as remaining;
+}
+
+message(0x595f07bc) JettonBurn {
+    queryId: Int as uint64;
+    amount: Int as coins;
+    responseDestination: Address?;
+    customPayload: Cell?;
+}
+
+message(0x7bdd97de) JettonBurnNotification {
+    queryId: Int as uint64;
+    amount: Int as coins;
+    sender: Address;
+    responseDestination: Address?;
+}
+
+message(0xd53276db) JettonExcesses {
+    queryId: Int as uint64;
 }
 
 const MAX_COINS: Int = 100000;
@@ -92,12 +110,13 @@ const SWAP: Int = 0xafafafaf;
 const PROVIDE_LP: Int = 0xfafafafa;
 const SWAP_REFUND_RESERVE_ERR: Int = 0xcccccccc;
 const SWAP_OK: Int = 0xcccccccd;
+const REFUND_OK: Int = 0xdddddddd;
 
-const INSUFFICIENT_GAS: Int = 1004;
-const INVALID_CALLER: Int = 1005;
-const INVALID_AMOUNT: Int = 1006;
-const WRONG_CALLER: Int = 2003;
-const SWAP_REFUND_NO_LIQ: Int = 2004;
 const WRONG_OP: Int = 1001;
 const ZERO_OUTPUT: Int = 1002;
 const NO_LIQUIDITY: Int = 1003; 
+const INSUFFICIENT_GAS: Int = 1004;
+const INVALID_CALLER: Int = 1005;
+const INVALID_AMOUNT: Int = 1006;
+const WRONG_CALLER: Int = 1007;
+const SWAP_REFUND_NO_LIQ: Int = 1008;

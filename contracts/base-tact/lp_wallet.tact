@@ -1,66 +1,78 @@
 import "./messages";
 
-message Burn {
-    query_id: Int;
-    jetton_amount: Int;
-    response_address: Address;
+inline fun getLPWalletStateInit(ownerAddress: Address, jettonMasterAddress: Address): StateInit {
+    return initOf LPWallet(
+        0,
+        ownerAddress,
+        jettonMasterAddress
+    );
 }
 
-contract Wallet {
-    balance: Int;
-    owner_address: Address;
-    jetton_master_address: Address;
-    jetton_wallet_code: Cell;
+inline fun getLPWalletAddress(ownerAddress: Address, jettonMasterAddress: Address): Address {
+    return contractAddress(getLPWalletStateInit(ownerAddress, jettonMasterAddress));
+}
 
-    receive(msg: Transfer) {
-        self.balance = self.balance - msg.jetton_amount;
+contract LPWallet {
+    balance: Int as coins;
+    ownerAddress: Address;
+    jettonMasterAddress: Address;
+
+    init(balance: Int, ownerAddress: Address, jettonMasterAddress: Address) {
+        self.balance = balance;
+        self.ownerAddress = ownerAddress;
+        self.jettonMasterAddress = jettonMasterAddress;
+    }
+
+    receive(msg: JettonTransfer) {
+        self.balance -= msg.amount;
+        let toWalletAddress= getLPWalletAddress(msg.destination, self.jettonMasterAddress);
         send(SendParameters{
-            to: ,
+            to: toWalletAddress,
             value: 0,
-            bounce: false, // TODO
-            mode: SendRemainingValue, // TODO
-            body: InternalTransfer {
-                query_id: msg.query_id,
-                jetton_amount: msg.jetton_amount,
-                owner_address: self.owner_address,
-                response_address: msg.response_address,
-                forward_ton_amount: msg.forward_ton_amount,
-                either_forward_payload: msg.either_forward_payload
-            }
+            bounce: false,
+            mode: SendRemainingValue,
+            body: JettonTransferInternal {
+                queryId: msg.queryId,
+                amount: msg.amount,
+                sender: self.ownerAddress,
+                responseDestination: msg.responseDestination,
+                forwardTonAmount: msg.forwardTonAmount,
+                forwardPayload: msg.forwardPayload
+            }.toCell()
         });
     }
 
-    receive(msg: InternalTransfer) {
-        self.balance += msg.jetton_amount;
-        if (msg.forward_ton_amount) {
+    receive(msg: JettonTransferInternal) {
+        self.balance += msg.amount;
+        if (msg.forwardTonAmount > 0) {
             send(SendParameters{
-                to: self.owner_address,
+                to: self.ownerAddress,
                 value: 0,
                 bounce: false, // TODO
                 mode: SendRemainingValue, // TODO
-                body: TransferNotification {
-                    query_id: msg.query_id,
-                    jetton_amount: msg.jetton_amount,
-                    from_address: msg.from_address,
-                    either_forward_payload: msg.either_forward_payload
-                }
+                body: JettonNotification {
+                    queryId: msg.queryId,
+                    amount: msg.amount,
+                    sender: msg.sender,
+                    forwardPayload: msg.forwardPayload
+                }.toCell()
             });
         }
     }
 
-    receive(msg: Burn) {
-        self.balance = self.balance - msg.jetton_amount;
+    receive(msg: JettonBurn) {
+        self.balance -= msg.amount;
         send(SendParameters{
-            to: self.jetton_master_address,
+            to: self.jettonMasterAddress,
             value: 0,
-            bounce: false, // TODO
-            mode: SendRemainingValue, // TODO
-            body: BurnNotification {
-                query_id: msg.query_id,
-                jetton_amount: msg.jetton_amount,
-                from_address: self.owner_address,
-                response_address: msg.response_address
-            }
+            bounce: false, 
+            mode: SendRemainingValue,
+            body: JettonBurnNotification {
+                queryId: msg.queryId,
+                amount: msg.amount,
+                sender: self.ownerAddress,
+                responseDestination: msg.responseDestination
+            }.toCell()
         });
     }
 }
