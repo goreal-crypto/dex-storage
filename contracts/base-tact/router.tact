@@ -1,52 +1,6 @@
 import "./pool";
+import "./messages";
 
-message(0xffffaaaa) PayTo {
-    queryId: Int as uint64;
-    toAddress: Address;
-    exitCode: Int as uint32;
-    amount0Out: Int as coins;
-    token0Address: Address;
-    amount1Out: Int as coins;
-    token1Address: Address;
-}
-
-
-
-message(0xf8a7ea5) JettonTransfer {
-    queryId: Int as uint64;
-    amount: Int as coins;
-    destination: Address;
-    responseDestination: Address?;
-    customPayload: Cell?;
-    forwardTonAmount: Int as coins;
-    forwardPayload: Slice as remaining;
-}
-
-message(0x7362d09c) JettonNotification {
-    queryId: Int as uint64;
-    amount: Int as coins;
-    sender: Address;
-    forwardPayload: Slice as remaining;
-}
-
-const swap: Int = 0xafafafaf;
-const provide_lp: Int = 0xfafafafa;
-
-
-
-
-// struct SwapPayload {
-//     a: Int as uint32;
-//     b: Address;
-//     toAddress: Address;
-//     minOutput: Int as coins;
-//     // hasRef: Bool;
-//     // refAddress: Address?;
-// }
-
-const INSUFFICIENT_GAS: Int = 1004;
-const INVALID_CALLER: Int = 1005;
-const INVALID_AMOUNT: Int = 1006;
 
 
 // TODO
@@ -56,13 +10,13 @@ inline fun getPoolStateInit(token0Address: Address, token1Address: Address): Sta
         // 0,           // lp_fee
         // 0,           // ref_fee
         token0Address, // token0Address
-        token1Address // token1Address
-        // 0,           // total_supply_lp
+        token1Address, // token1Address
+        0,           // totalSupplyLP
         // 0,           // collected_token0_protocol_fee
         // 0,           // collected_token1_protocol_fee
         // ?,           // protocol_fee_address
-        // 0,           // reserve0
-        // 0,           // reserve1
+        0,           // reserve0
+        0,           // reserve1
     );
 }
 
@@ -160,7 +114,7 @@ contract Router {
                 }.toCell()
             });
         } else {
-            if (opcode == swap) {
+            if (opcode == SWAP) {
                 let toAddress = payload.loadAddress();
                 let minOutput = payload.loadCoins();   
                 // let swapPayload: SwapPayload = SwapPayload.fromSlice(msg.forwardPayload);
@@ -184,7 +138,7 @@ contract Router {
                         // refAddress: msg.sender
                     }.toCell()
                 });
-            } else if (opcode == provide_lp) {
+            } else if (opcode == PROVIDE_LP) {
                 // let transferredMsg: ProvideLP = ProvideLP.fromSlice(payload);
                 let minLPOut: Int = payload.loadCoins();
                 let poolAddress: Address = getPoolAddress(ctx.sender, token1Address);
@@ -195,7 +149,7 @@ contract Router {
                     bounce: false,
                     body: ProvideLP {
                         queryId: msg.queryId,
-                        fromAddress: msg.sender,
+                        fromUser: msg.sender,
                         minLPOut: minLPOut,
                         amount0: msg.amount, // 0
                         amount1: 0 // msg.amount

@@ -1,39 +1,4 @@
-message(0xaaaaaaaa) AddLiquidity {
-    queryId: Int;
-    newAmount0: Int;
-    newAmount1: Int;
-    minLPOut: Int;
-}
-
-message CbAddLiquidity {
-    queryId: Int;
-    amount0: Int;
-    amount1: Int;
-    userAddress: Address;
-    minLPOut: Int;
-}
-
-message RefundMe {
-    queryId: Int;
-}
-
-message CbRefundMe {
-    queryId: Int;
-    amount0: Int;
-    amount1: Int;
-    userAddress: Address;
-}
-
-message DirectAddLiquidity {
-    queryId: Int;
-    amount0: Int;
-    amount1: Int;
-    minLPOut: Int;
-}
-
-const WRONG_OP: Int = 1001;
-const ZERO_OUTPUT: Int = 1002;
-const NO_LIQUIDITY: Int = 1003; 
+import "./messages";
 
 contract LPAccount {
     userAddress: Address;

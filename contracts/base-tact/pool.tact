@@ -1,32 +1,5 @@
 import "./lp_account";
-
-message(0xaaaaffff) Swap {
-    queryId: Int as uint64;
-    fromAddress: Address;
-    tokenWallet: Address;
-    jettonAmount: Int as coins;
-    minOutput: Int as coins;
-    // hasRef: Bool;
-    // refAddress: Address?;
-}
-
-message(0xabababab) ProvideLP {
-    queryId: Int as uint64;
-    fromUser: Address;
-    minLPOut: Int as coins;
-    amount0: Int as coins;
-    amount1: Int as coins; 
-}
-
-message BurnNotification {
-    query_id: Int;
-    jetton_amount: Int;
-    from_address: Address;
-    response_address: Address;
-}
-
-const WRONG_CALLER: Int = 2003;
-const swap_refund_no_liq: Int = 2004;
+import "./messages";
 
 
 inline fun getLPAccountStateInit(userAddress: Address, poolAddress: Address): StateInit {
@@ -40,6 +13,12 @@ inline fun getLPAccountStateInit(userAddress: Address, poolAddress: Address): St
 
 inline fun getLPAccountAddress(userAddress: Address, poolAddress: Address): Address {
     return contractAddress(getLPAccountStateInit(userAddress, poolAddress));
+}
+
+//TODO fees
+inline fun getAmountOut(amountIn: Int, reserveIn: Int, reserveOut: Int): Int {
+    let baseOut: Int = (amountIn * reserveOut) / (reserveIn + amountIn);
+    return baseOut;
 }
 
 contract Pool {
@@ -168,21 +147,22 @@ contract Pool {
 
 //     }
 
+    // TODO fees
     receive(msg: Swap) {
         throwUnless(WRONG_CALLER, sender() == self.routerAddress);
 
         let output: Int = 0;
         let tmpAmount0: Int = 0;
         let tmpAmount1: Int = 0;
-        if (tokenWallet == self.token0Address) {
+        if (msg.tokenWallet == self.token0Address) {
             output = getAmountOut(msg.jettonAmount, self.reserve0, self.reserve1);
-            tmpAmount0 = amount;
+            tmpAmount0 = msg.jettonAmount;
         } else {
             output = getAmountOut(msg.jettonAmount, self.reserve1, self.reserve0);
-            tmpAmount1 = amount;
+            tmpAmount1 = msg.jettonAmount;
         }
 
-        if ((self.totalSupplyLP <= 0) || (output <= 0) || (minOutput >= output)) {
+        if ((self.totalSupplyLP <= 0) || (output <= 0) || (msg.minOutput >= output)) {
             message(MessageParameters{
                 to: self.routerAddress,
                 value: 0,
@@ -191,7 +171,7 @@ contract Pool {
                 body: PayTo{
                     queryId: msg.queryId,
                     toAddress: msg.fromAddress,
-                    exitCode: swap_refund_no_liq,
+                    exitCode: SWAP_REFUND_NO_LIQ,
                     amount0Out: tmpAmount0,
                     token0Address: self.token0Address,
                     amount1Out: tmpAmount1,
@@ -214,7 +194,7 @@ contract Pool {
                     body: PayTo{
                         queryId: msg.queryId,
                         toAddress: msg.fromAddress,
-                        exitCode: swap_refund_reserve_err,
+                        exitCode: SWAP_REFUND_RESERVE_ERR,
                         amount0Out: tmpAmount0,
                         token0Address: self.token0Address,
                         amount1Out: tmpAmount1,
@@ -231,7 +211,7 @@ contract Pool {
                 body: PayTo{
                     queryId: msg.queryId,
                     toAddress: msg.fromAddress,
-                    exitCode: swap_ok,
+                    exitCode: SWAP_OK,
                     amount0Out: 0,
                     token0Address: self.token0Address,
                     amount1Out: output,
@@ -251,7 +231,7 @@ contract Pool {
                     body: PayTo{
                         queryId: msg.queryId,
                         toAddress: msg.fromAddress,
-                        exitCode: swap_refund_reserve_err,
+                        exitCode: SWAP_REFUND_RESERVE_ERR,
                         amount0Out: tmpAmount0,
                         token0Address: self.token0Address,
                         amount1Out: tmpAmount1,
@@ -268,7 +248,7 @@ contract Pool {
                 body: PayTo{
                     queryId: msg.queryId,
                     toAddress: msg.fromAddress,
-                    exitCode: swap_ok,
+                    exitCode: SWAP_OK,
                     amount0Out: output,
                     token0Address: self.token0Address,
                     amount1Out: 0,

@@ -1,3 +1,5 @@
+import "./messages";
+
 message Burn {
     query_id: Int;
     jetton_amount: Int;
@@ -56,7 +58,7 @@ contract Wallet {
             body: BurnNotification {
                 query_id: msg.query_id,
                 jetton_amount: msg.jetton_amount,
-                owner_address: self.owner_address,
+                from_address: self.owner_address,
                 response_address: msg.response_address
             }
         });

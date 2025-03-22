@@ -3,6 +3,8 @@ import { beginCell, Builder, toNano } from '@ton/core';
 import '@ton/test-utils';
 import { Router } from '../wrappers/Router';
 import { Pool } from '../wrappers/Pool';
+import { LPAccount } from '../wrappers/LPAccount';
+
 import { PayTo } from '../wrappers/Router';
 
 
@@ -13,7 +15,8 @@ describe('Router', () => {
     let pool: SandboxContract<Pool>;
     let token0: SandboxContract<TreasuryContract>;
     let token1: SandboxContract<TreasuryContract>;
-
+    let lpAccount: SandboxContract<LPAccount>;
+    
     beforeEach(async () => {
         blockchain = await Blockchain.create();
         user = await blockchain.treasury("user");
@@ -23,7 +26,15 @@ describe('Router', () => {
             .fromInit()
         );
         pool = blockchain.openContract(await Pool
-            .fromInit(router.address, token0.address, token1.address)
+            .fromInit(router.address, token0.address, token1.address, 0n, 0n, 0n)
+        );
+        lpAccount = blockchain.openContract(await LPAccount
+            .fromInit(
+                user.address, 
+                pool.address, 
+                toNano(0), 
+                toNano(0)
+            )
         );
         await pool.send(
             user.getSender(),
@@ -38,7 +49,14 @@ describe('Router', () => {
                 value: toNano('1'),
             }, 
             null
-        )
+        );
+        await lpAccount.send(
+            user.getSender(),
+            {
+                value: toNano('1'),
+            }, 
+            null
+        );
     });
 
     it("should get a valid pool address", async () => {
@@ -187,6 +205,7 @@ describe('Router', () => {
             to: pool.address,
             success: true,
         });
+    
 
     });
 });
