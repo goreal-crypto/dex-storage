@@ -3,8 +3,8 @@ import "./messages";
 contract LPAccount {
     userAddress: Address;
     poolAddress: Address;
-    amount0: Int;
-    amount1: Int;
+    amount0: Int as coins;
+    amount1: Int as coins;
 
     init(userAddress: Address, poolAddress: Address, amount0: Int, amount1: Int) {
         self.userAddress = userAddress;

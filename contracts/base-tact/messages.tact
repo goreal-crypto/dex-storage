@@ -105,6 +105,7 @@ message(0xd53276db) JettonExcesses {
 }
 
 const MAX_COINS: Int = 100000;
+const REQUIRED_MIN_LIQUIDITY: Int = 1000;
 
 const SWAP: Int = 0xafafafaf;
 const PROVIDE_LP: Int = 0xfafafafa;

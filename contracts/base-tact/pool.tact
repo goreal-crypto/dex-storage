@@ -2,7 +2,6 @@ import "./lp_account";
 import "./messages";
 import "./lp_wallet";
 
-
 inline fun getLPAccountStateInit(userAddress: Address, poolAddress: Address): StateInit {
     return initOf LPAccount(
         userAddress,
@@ -15,18 +14,6 @@ inline fun getLPAccountStateInit(userAddress: Address, poolAddress: Address): St
 inline fun getLPAccountAddress(userAddress: Address, poolAddress: Address): Address {
     return contractAddress(getLPAccountStateInit(userAddress, poolAddress));
 }
-
-// inline fun getLPWalletStateInit(ownerAddress: Address, jettonMasterAddress: Address): StateInit {
-//     return initOf LPWallet(
-//         0,
-//         ownerAddress,
-//         jettonMasterAddress
-//     );
-// }
-
-// inline fun getLPWalletAddress(ownerAddress: Address, jettonMasterAddress: Address): Address {
-//     return contractAddress(getLPWalletStateInit(ownerAddress, jettonMasterAddress));
-// }
 
 //TODO fees
 inline fun getAmountOut(amountIn: Int, reserveIn: Int, reserveOut: Int): Int {
@@ -98,7 +85,7 @@ contract Pool {
         let to: Address = myAddress(); // TODO fix
 
         if (self.totalSupplyLP == 0) {
-            liquidity = sqrt(msg.amount0 * msg.amount1) / self.reserve0;
+            liquidity = sqrt(msg.amount0 * msg.amount1) / REQUIRED_MIN_LIQUIDITY;
             // to = addressNone() // TODO 
         } else {
             let toMint0 = (msg.amount0 * self.totalSupplyLP) / self.reserve0;
