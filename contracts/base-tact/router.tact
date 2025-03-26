@@ -2,7 +2,6 @@ import "./pool";
 import "./messages";
 
 
-
 // TODO
 inline fun getPoolStateInit(token0Address: Address, token1Address: Address): StateInit {
     return initOf Pool(
@@ -27,12 +26,14 @@ inline fun getPoolAddress(token0Address: Address, token1Address: Address): Addre
 
 contract Router {
     // isLocked: Bool;
-    // admin_address: Address;
+    adminAddress: Address;
     // jetton_lp_wallet_code: Cell; 
     // pool_code: Cell;
     // lp_account_code: Cell; 
     // temp_upgrade: Cell;
-    receive(){}
+    receive(adminAddress: Address){
+        self.adminAddress = adminAddress;
+    }
 
     receive(msg: PayTo) {
         // let gasRequired = get_gas_fee(20000, WORKCHAIN); // TODO
@@ -158,9 +159,81 @@ contract Router {
             }
         }
     }  
+    
+
+// TODO admin calls
+
+    // receive(msg: SetFees) {
+
+        // throwUnless(INVALID_CALLER, sender() == self.adminAddress);
+    //     let (newLpFee, newProtocolFee, newRefFee, newProtocolFeeAddress) = (msg.lpFee, msg.protocolFee, msg.refFee, msg.protocolFeeAddress);
+    //     let (jettonWallet0, jettonWallet1) = (msg.jettonWallet0, msg.jettonWallet1);
+    //     let (_, poolAddress) = getPoolStateInitAndAddress(jettonWallet0, jettonWallet1);
+        
+    //     let body = beginCell()
+    //         .store_uint(set_fees, 32)
+    //         .store_uint(context().query_id, 64)
+    //         .store_uint(newLpFee, 8)
+    //         .store_uint(newProtocolFee, 8)
+    //         .store_uint(newRefFee, 8)
+    //         .store_slice(newProtocolFeeAddress);
+    //     send_simple_message(0, poolAddress, body.end_cell(), CARRY_REMAINING_GAS);
+    // }
+
+    // receive(msg: CollectFees) {
+            // throwUnless(INVALID_CALLER, sender() == self.adminAddress);
+
+    //     let (jettonWallet0, jettonWallet1) = (msg.jettonWallet0, msg.jettonWallet1);
+    //     let (_, poolAddress) = getPoolStateInitAndAddress(jettonWallet0, jettonWallet1);
+    //     let body = beginCell()
+    //         .store_uint(collect_fees, 32)
+    //         .store_uint(context().query_id, 64);
+    //     send_simple_message(0, poolAddress, body.end_cell(), CARRY_REMAINING_GAS);
+    // }
+
+    // receive(msg: Lock) {
+            // throwUnless(INVALID_CALLER, sender() == self.adminAddress);
+
+    //     self.isLocked = true;
+    // }
+    
+    // receive(msg: Unlock) {
+            // throwUnless(INVALID_CALLER, sender() == self.adminAddress);
+
+    //     self.isLocked = false;
+    // }
+
+    
+    // receive(msg: ResetGas) {
+            // throwUnless(INVALID_CALLER, sender() == self.adminAddress);
+
+    //     message(MessageParameters{
+    //          to: self.adminAddress
+    //          value: my_balance - REQUIRED_TON_RESERVE,
+    //          mode: SendDefaultMode,
+    //          bounce: false,
+    //          body: empty
+    //  });
+    // }
+    
+    // receive(msg: ResetPoolGas) {
+            // throwUnless(INVALID_CALLER, sender() == self.adminAddress);
+
+    //     let (jettonWallet0, jettonWallet1) = (msg.jettonWallet0, msg.jettonWallet1);
+    //     let (_, poolAddress) = getPoolStateInitAndAddress(jettonWallet0, jettonWallet1);
+    //     let body = beginCell().store_uint(reset_gas, 32).store_uint(context().query_id, 64);
+    //     send_simple_message(0, poolAddress, body.end_cell(), CARRY_REMAINING_GAS);
+        //     message(MessageParameters{
+    //          to: poolAddress
+    //          value: 0,
+    //          mode: SendRemainingValue,
+    //          bounce: false,
+    //          body: body
+    //  });
+    // }
+
 
     get fun getPoolAddress(token0Address: Address, token1Address: Address): Address {
         return getPoolAddress(token0Address, token1Address)
     }
 }
-

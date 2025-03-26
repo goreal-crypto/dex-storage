@@ -48,7 +48,7 @@ contract Pool {
 
     receive(){}
 
-    // receive(msg: BurnNotification) {
+    // receive(msg: JettonBurnNotification) {
 //         // throwUnless(INSUFFICIENT_GAS, (msg_value > gas_required) & (msg_value > cs~load_coins() * 6));
 //         // throwUnless(INVALID_CALLER, equal_slices(calculate_user_jetton_lp_wallet_address(from_address, my_address(), storage::jetton_lp_wallet_code), sender_address));
 //         throwUnless(ZERO_OUTPUT, msg.jetton_amount > 0);
@@ -149,7 +149,7 @@ contract Pool {
             }.toCell()
         });
     }
-
+// TODO
 //     receive(msg: CollectFees) {
 //         let reward0 = self.collected_token0_protocol_fee / 1000;
 //         let reward1 = self.collected_token1_protocol_fee / 1000;
@@ -290,6 +290,8 @@ contract Pool {
         }); 
     }
 
+
+// TODO 
 //     receive(msg: ResetGas) {
 
 //     }
