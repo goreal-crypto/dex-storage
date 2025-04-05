@@ -163,22 +163,22 @@ contract Router {
 
 // TODO admin calls
 
-    // receive(msg: SetFees) {
+    receive(msg: SetFees) {
 
-        // throwUnless(INVALID_CALLER, sender() == self.adminAddress);
-    //     let (newLpFee, newProtocolFee, newRefFee, newProtocolFeeAddress) = (msg.lpFee, msg.protocolFee, msg.refFee, msg.protocolFeeAddress);
-    //     let (jettonWallet0, jettonWallet1) = (msg.jettonWallet0, msg.jettonWallet1);
-    //     let (_, poolAddress) = getPoolStateInitAndAddress(jettonWallet0, jettonWallet1);
+        throwUnless(INVALID_CALLER, sender() == self.adminAddress);
+        let (newLpFee, newProtocolFee, newRefFee, newProtocolFeeAddress) = (msg.lpFee, msg.protocolFee, msg.refFee, msg.protocolFeeAddress);
+        let (jettonWallet0, jettonWallet1) = (msg.jettonWallet0, msg.jettonWallet1);
+        let (_, poolAddress) = getPoolStateInitAndAddress(jettonWallet0, jettonWallet1);
         
-    //     let body = beginCell()
-    //         .store_uint(set_fees, 32)
-    //         .store_uint(context().query_id, 64)
-    //         .store_uint(newLpFee, 8)
-    //         .store_uint(newProtocolFee, 8)
-    //         .store_uint(newRefFee, 8)
-    //         .store_slice(newProtocolFeeAddress);
-    //     send_simple_message(0, poolAddress, body.end_cell(), CARRY_REMAINING_GAS);
-    // }
+        let body = beginCell()
+            .store_uint(set_fees, 32)
+            .store_uint(query_id, 64)
+            .store_uint(newLpFee, 8)
+            .store_uint(newProtocolFee, 8)
+            .store_uint(newRefFee, 8)
+            .store_slice(newProtocolFeeAddress);
+        send_simple_message(0, poolAddress, body.end_cell(), CARRY_REMAINING_GAS);
+    }
 
     // receive(msg: CollectFees) {
             // throwUnless(INVALID_CALLER, sender() == self.adminAddress);

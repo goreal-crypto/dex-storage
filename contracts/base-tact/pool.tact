@@ -15,38 +15,82 @@ inline fun getLPAccountAddress(userAddress: Address, poolAddress: Address): Addr
     return contractAddress(getLPAccountStateInit(userAddress, poolAddress));
 }
 
-//TODO fees
-inline fun getAmountOut(amountIn: Int, reserveIn: Int, reserveOut: Int): Int {
-    let baseOut: Int = (amountIn * reserveOut) / (reserveIn + amountIn);
-    return baseOut;
+struct AmountOut {
+    out: Int as coins; 
+    protocolFeeOut: Int as coins;
+    refFeeOut: Int as coins;
 }
+
 
 contract Pool {
     routerAddress: Address;
-    // lp_fee: Int;
-    // protocol_fee: Int;
-    // ref_fee: Int;
+    LPFee: Int as uint8;
+    protocolFee: Int as uint8;
+    refFee: Int as uint8;
     token0Address: Address;
     token1Address: Address;
     totalSupplyLP: Int as coins; 
-    // collected_token0_protocol_fee: Int;
-    // collected_token1_protocol_fee: Int; 
-    // protocol_fee_address: Address;
+    collectedToken0ProtocolFee: Int as coins;
+    collectedToken1ProtocolFee: Int as coins; 
+    protocolFeeAddress: Address;
     reserve0: Int as coins;
     reserve1: Int as coins; 
     // // jetton_lp_wallet_code: Cell;
     // // lp_account_code: Cell;
 
-    init(routerAddress: Address, token0Address: Address, token1Address: Address, reserve0: Int, reserve1: Int, totalSupplyLP: Int) {
+    init(
+        routerAddress: Address,
+        LPFee: Int as uint8,
+        protocolFee: Int as uint8,
+        refFee: Int as uint8,
+        token0Address: Address,
+        token1Address: Address,
+        totalSupplyLP: Int as coins,
+        collectedToken0ProtocolFee: Int as coins,
+        collectedToken1ProtocolFee: Int as coins,
+        protocolFeeAddress: Address,
+        reserve0: Int as coins,
+        reserve1: Int as coins
+    ) {
         self.routerAddress = routerAddress;
+        self.LPFee = LPFee;
+        self.protocolFee = protocolFee;
+        self.refFee = refFee;
         self.token0Address = token0Address;
         self.token1Address = token1Address;
+        self.totalSupplyLP = totalSupplyLP;
+        self.collectedToken0ProtocolFee = collectedToken0ProtocolFee;
+        self.collectedToken1ProtocolFee = collectedToken1ProtocolFee;
+        self.protocolFeeAddress = protocolFeeAddress;
         self.reserve0 = reserve0;
         self.reserve1 = reserve1;
-        self.totalSupplyLP = totalSupplyLP;
     }
 
     receive(){}
+
+
+    //TODO fees
+    inline fun getAmountOut(hasRef: Bool, amountIn: Int, reserveIn: Int, reserveOut: Int): AmountOut {
+        // let baseOut: Int = (amountIn * reserveOut) / (reserveIn + amountIn);
+        let amountOnWithFee: Int = amountIn * (FEE_DIVIDER - self.LPFee);
+        let baseOut: Int = (amountInWithFee * reserveOut) / (reserveIn * FEE_DIVIDER + amountInWithFee);
+        let protocolFeeOut: Int = 0;
+        let refFeeOut: Int = 0;
+        if (self.protocolFee > 0) {
+            protocolFeeOut =  divc(baseOut * self.protocol_fee, FEE_DIVIDER)
+        }
+        if (hasRef && (self.refFee > 0)) {
+            refFeeOut = divc(baseOut * self.refFee, FEE_DIVIDER);
+        }
+        
+        baseOut -= protocolFeeOut + refFeeOut;
+                
+        return AmountOut{
+            out: baseOut,
+            protocolFeeOut: protocolFeeOut,
+            refFeeOut: refFeeOut
+        };
+    }
 
     // receive(msg: JettonBurnNotification) {
 //         // throwUnless(INSUFFICIENT_GAS, (msg_value > gas_required) & (msg_value > cs~load_coins() * 6));
@@ -108,7 +152,7 @@ contract Pool {
                     queryId: msg.queryId,
                     newAmount0: msg.amount0,
                     newAmount1: msg.amount1,
-                    minLPOut: 0
+                    minLPOut: 0,
                 }.toCell()
             });
         } else {
@@ -124,7 +168,7 @@ contract Pool {
                     sender: myAddress(),
                     responseDestination: to,
                     forwardTonAmount: 0,
-                    forwardPayload: emptySlice()
+                    forwardPayload: emptySlice(),
                 }.toCell() 
             });
         }
@@ -145,22 +189,70 @@ contract Pool {
                 amount0Out: msg.amount0,
                 token0Address: self.token0Address,
                 amount1Out: msg.amount1,
-                token1Address: self.token1Address
+                token1Address: self.token1Address,
             }.toCell()
         });
     }
 // TODO
-//     receive(msg: CollectFees) {
-//         let reward0 = self.collected_token0_protocol_fee / 1000;
-//         let reward1 = self.collected_token1_protocol_fee / 1000;
+    receive(msg: CollectFees) {
+        throwUnless(NO_LIQUIDITY, self.totalSupplyLP > REQUIRED_MIN_LIQUIDITY);
+        throwUnless(LOW_LIQUIDITY, (self.collectedToken0ProtocolFee > REQUIRED_MIN_COLLECT_FEES) &&
+                                   (self.collectedToken1ProtocolFee > REQUIRED_MIN_COLLECT_FEES));
+
+        // let gasRequired = getGasFee(40000, WORKCHAIN);
+        // throwUnless(INSUFFICIENT_GAS, (msgValue - gasRequired) > 1000000000); // 1 ton
+        int gas = (context().value - gasRequired) / 4;
+        int reward0 = storage::collected_token0_protocol_fee / 1000;
+        int reward1 = storage::collected_token1_protocol_fee / 1000;
+        storage::collected_token0_protocol_fee -= reward0;
+        storage::collected_token1_protocol_fee -= reward1;
+
+        throwUnless(ZERO_OUTPUT, (reward0 > 0) ?& (reward1 > 0));
+        throwUnless(ZERO_OUTPUT, (self.collected_token0_protocol_fee > 0) && 
+                                 (self.collected_token1_protocol_fee > 0));
+
+        let reward0 = self.collectedToken0ProtocolFee / 1000;
+        let reward1 = self.collectedToken1ProtocolFee / 1000;
         
-//         // call_pay_to(gas * 3, NORMAL, query_id, storage::protocol_fee_address, 0, storage::collected_token0_protocol_fee, storage::collected_token1_protocol_fee); ;; revert if fails
-//         // call_pay_to(gas, IGNORE_ERRORS, query_id, sender_address, 0, reward0, reward1);
+        // call_pay_to(gas * 3, NORMAL, query_id, storage::protocol_fee_address, 0, storage::collected_token0_protocol_fee, storage::collected_token1_protocol_fee); ;; revert if fails
+        // call_pay_to(gas, IGNORE_ERRORS, query_id, sender_address, 0, reward0, reward1);
 
-//         self.collected_token0_protocol_fee -= reward0;
-//         self.collected_token1_protocol_fee -= reward1;
+        message(MessageParameters{
+            to: self.routerAddress,
+            value: gas * 3,
+            mode: SendDefaultMode,
+            bounce: true,
+            body: PayTo {
+                queryId: msg.queryId,
+                toAddress: self.protocolFeeAddress,
+                exitCode: 0,
+                amount0Out: self.collectedToken0ProtocolFee,
+                token0Address: self.token0Address,
+                amount1Out: self.collectedToken1ProtocolFee,
+                token1Address: self.token1Address,
+            }.toCell(),
+        });
 
-//     }
+        message(MessageParameters{
+            to: self.routerAddress,
+            value: gas,
+            mode: SendDefaultMode,
+            bounce: true,
+            body: PayTo {
+                queryId: msg.queryId,
+                toAddress: sender(),
+                exitCode: 0,
+                amount0Out: reward0,
+                token0Address: self.token0Address,
+                amount1Out: reward1,
+                token1Address: self.token1Address,
+            }.toCell(),
+        });
+
+        self.collectedToken0ProtocolFee -= reward0;
+        self.collectedToken1ProtocolFee -= reward1;
+
+    }
 
     // TODO fees
     receive(msg: Swap) {
@@ -285,7 +377,7 @@ contract Pool {
                 queryId: msg.queryId,
                 newAmount0: msg.amount0,
                 newAmount1: msg.amount1,
-                minLPOut: msg.minLPOut
+                minLPOut: msg.minLPOut,
             }.toCell()
         }); 
     }

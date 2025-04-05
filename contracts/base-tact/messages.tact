@@ -1,11 +1,11 @@
-message(0xaaaaaaaa) AddLiquidity {
+message(0xaaaaaaa1) AddLiquidity {
     queryId: Int;
     newAmount0: Int;
     newAmount1: Int;
     minLPOut: Int;
 }
 
-message(0xaaaaaaab) CbAddLiquidity {
+message(0xaaaaaaa2) CbAddLiquidity {
     queryId: Int;
     amount0: Int;
     amount1: Int;
@@ -13,25 +13,25 @@ message(0xaaaaaaab) CbAddLiquidity {
     minLPOut: Int;
 }
 
-message(0xbbbbbbbb) RefundMe {
+message(0xaaaaaaa3) RefundMe {
     queryId: Int;
 }
 
-message(0xbbbbbbba) CbRefundMe {
+message(0xaaaaaaa4) CbRefundMe {
     queryId: Int;
     amount0: Int;
     amount1: Int;
     userAddress: Address;
 }
 
-message(0xabcdabcd) DirectAddLiquidity {
+message(0xaaaaaaa5) DirectAddLiquidity {
     queryId: Int;
     amount0: Int;
     amount1: Int;
     minLPOut: Int;
 }
 
-message(0xaaaaffff) Swap {
+message(0xaaaaaaa6) Swap {
     queryId: Int as uint64;
     fromAddress: Address;
     tokenWallet: Address;
@@ -41,7 +41,7 @@ message(0xaaaaffff) Swap {
     // refAddress: Address?;
 }
 
-message(0xabababab) ProvideLP {
+message(0xaaaaaaa7) ProvideLP {
     queryId: Int as uint64;
     fromUser: Address;
     minLPOut: Int as coins;
@@ -49,7 +49,7 @@ message(0xabababab) ProvideLP {
     amount1: Int as coins; 
 }
 
-message(0xffffaaaa) PayTo {
+message(0xaaaaaaa8) PayTo {
     queryId: Int as uint64;
     toAddress: Address;
     exitCode: Int as uint32;
@@ -57,6 +57,13 @@ message(0xffffaaaa) PayTo {
     token0Address: Address;
     amount1Out: Int as coins;
     token1Address: Address;
+}
+
+message(0xaaaaaaa9) SetFees {
+    newLpFee: Int as uint8;
+    newProtocolFee: Int as uint8;
+    newRefFee: Int as uint8;
+    newProtocolFeeAddress: Address;
 }
 
 
@@ -104,14 +111,15 @@ message(0xd53276db) JettonExcesses {
     queryId: Int as uint64;
 }
 
-const MAX_COINS: Int = 100000;
+const MAX_COINS: Int = 1329227995784915872903807060280344575;
 const REQUIRED_MIN_LIQUIDITY: Int = 1000;
+const FEE_DIVIDER: Int = 10000;
 
-const SWAP: Int = 0xafafafaf;
-const PROVIDE_LP: Int = 0xfafafafa;
-const SWAP_REFUND_RESERVE_ERR: Int = 0xcccccccc;
-const SWAP_OK: Int = 0xcccccccd;
-const REFUND_OK: Int = 0xdddddddd;
+const SWAP: Int = 0xfffffffa;
+const PROVIDE_LP: Int = 0xfffffffb;
+const SWAP_REFUND_RESERVE_ERR: Int = 0xfffffffc;
+const SWAP_OK: Int = 0xfffffffd;
+const REFUND_OK: Int = 0xfffffffe;
 
 const WRONG_OP: Int = 1001;
 const ZERO_OUTPUT: Int = 1002;
@@ -121,3 +129,5 @@ const INVALID_CALLER: Int = 1005;
 const INVALID_AMOUNT: Int = 1006;
 const WRONG_CALLER: Int = 1007;
 const SWAP_REFUND_NO_LIQ: Int = 1008;
+const LOW_LIQUIDITY: Int = 1009;
+const REQUIRED_MIN_COLLECT_FEES: Int = 1010;

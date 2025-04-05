@@ -16,7 +16,7 @@ contract LPAccount {
     receive(){}
 
     receive(msg: AddLiquidity) {
-        throwUnless(WRONG_OP, sender() == self.poolAddress);
+        throwUnless(INVALID_CALLER, sender() == self.poolAddress);
         self.amount0 += msg.newAmount0;
         self.amount1 += msg.newAmount1;
         if ((msg.minLPOut > 0) && (self.amount0 > 1000) && (self.amount1 > 1000)){
