@@ -1,6 +1,7 @@
 import "./lp_account";
 import "./messages";
 import "./lp_wallet";
+import "./gas";
 
 inline fun getLPAccountStateInit(userAddress: Address, poolAddress: Address): StateInit {
     return initOf LPAccount(
@@ -35,8 +36,6 @@ contract Pool {
     protocolFeeAddress: Address;
     reserve0: Int as coins;
     reserve1: Int as coins; 
-    // // jetton_lp_wallet_code: Cell;
-    // // lp_account_code: Cell;
 
     init(
         routerAddress: Address,
@@ -69,10 +68,9 @@ contract Pool {
     receive(){}
 
 
-    //TODO fees
     inline fun getAmountOut(hasRef: Bool, amountIn: Int, reserveIn: Int, reserveOut: Int): AmountOut {
         // let baseOut: Int = (amountIn * reserveOut) / (reserveIn + amountIn);
-        let amountOnWithFee: Int = amountIn * (FEE_DIVIDER - self.LPFee);
+        let amountInWithFee: Int = amountIn * (FEE_DIVIDER - self.LPFee);
         let baseOut: Int = (amountInWithFee * reserveOut) / (reserveIn * FEE_DIVIDER + amountInWithFee);
         let protocolFeeOut: Int = 0;
         let refFeeOut: Int = 0;
@@ -126,11 +124,11 @@ contract Pool {
 
     receive(msg: CbAddLiquidity) {
         let liquidity: Int = 0;
-        let to: Address = myAddress(); // TODO fix
+        let to: Address; 
 
         if (self.totalSupplyLP == 0) {
             liquidity = sqrt(msg.amount0 * msg.amount1) / REQUIRED_MIN_LIQUIDITY;
-            // to = addressNone() // TODO 
+            to = emptyAddress() 
         } else {
             let toMint0 = (msg.amount0 * self.totalSupplyLP) / self.reserve0;
             let toMint1 = (msg.amount1 * self.totalSupplyLP) / self.reserve1;
@@ -143,6 +141,7 @@ contract Pool {
         self.totalSupplyLP += liquidity;
 
         if ((liquidity < msg.minLPOut) || ((self.reserve0 > MAX_COINS) || (self.reserve1 > MAX_COINS))) {
+
             message(MessageParameters{
                 to: sender(),
                 value: 0,
@@ -193,29 +192,24 @@ contract Pool {
             }.toCell()
         });
     }
-// TODO
+    
     receive(msg: CollectFees) {
         throwUnless(NO_LIQUIDITY, self.totalSupplyLP > REQUIRED_MIN_LIQUIDITY);
         throwUnless(LOW_LIQUIDITY, (self.collectedToken0ProtocolFee > REQUIRED_MIN_COLLECT_FEES) &&
                                    (self.collectedToken1ProtocolFee > REQUIRED_MIN_COLLECT_FEES));
 
-        // let gasRequired = getGasFee(40000, WORKCHAIN);
-        // throwUnless(INSUFFICIENT_GAS, (msgValue - gasRequired) > 1000000000); // 1 ton
-        int gas = (context().value - gasRequired) / 4;
-        int reward0 = storage::collected_token0_protocol_fee / 1000;
-        int reward1 = storage::collected_token1_protocol_fee / 1000;
-        storage::collected_token0_protocol_fee -= reward0;
-        storage::collected_token1_protocol_fee -= reward1;
-
-        throwUnless(ZERO_OUTPUT, (reward0 > 0) ?& (reward1 > 0));
-        throwUnless(ZERO_OUTPUT, (self.collected_token0_protocol_fee > 0) && 
-                                 (self.collected_token1_protocol_fee > 0));
-
+        let msgValue = context().value;
+        let gasRequired = getGasFee(40000, WORKCHAIN);
+        throwUnless(INSUFFICIENT_GAS, (msgValue - gasRequired) > 1000000000); // 1 ton
+        let gas = (msgValue - gasRequired) / 4;
         let reward0 = self.collectedToken0ProtocolFee / 1000;
         let reward1 = self.collectedToken1ProtocolFee / 1000;
-        
-        // call_pay_to(gas * 3, NORMAL, query_id, storage::protocol_fee_address, 0, storage::collected_token0_protocol_fee, storage::collected_token1_protocol_fee); ;; revert if fails
-        // call_pay_to(gas, IGNORE_ERRORS, query_id, sender_address, 0, reward0, reward1);
+        self.collectedToken0ProtocolFee -= reward0;
+        self.collectedToken1ProtocolFee -= reward1;
+
+        throwUnless(ZERO_OUTPUT, (reward0 > 0) && (reward1 > 0));
+        throwUnless(ZERO_OUTPUT, (self.collectedToken0ProtocolFee > 0) && 
+                                 (self.collectedToken1ProtocolFee > 0));
 
         message(MessageParameters{
             to: self.routerAddress,
@@ -249,27 +243,38 @@ contract Pool {
             }.toCell(),
         });
 
-        self.collectedToken0ProtocolFee -= reward0;
-        self.collectedToken1ProtocolFee -= reward1;
+        self.collectedToken0ProtocolFee = 0;
+        self.collectedToken1ProtocolFee = 0;
 
     }
 
-    // TODO fees
     receive(msg: Swap) {
         throwUnless(WRONG_CALLER, sender() == self.routerAddress);
 
-        let output: Int = 0;
+        let refAddress: Address = emptyAddress();
         let tmpAmount0: Int = 0;
         let tmpAmount1: Int = 0;
+
+        let mode = SendRemainingValue;
+        let gas: Int = 0;
+
+        let amountOut: AmountOut;
+
+        if (msg.hasRef) {
+            mode = SendDefaultMode;
+            gas = (context().value - getGasFee(25000, WORKCHAIN)) / 2;
+            refAddress = msg.refAddress!!;
+        }
+
         if (msg.tokenWallet == self.token0Address) {
-            output = getAmountOut(msg.jettonAmount, self.reserve0, self.reserve1);
+            amountOut = getAmountOut(msg.jettonAmount, self.reserve0, self.reserve1);
             tmpAmount0 = msg.jettonAmount;
         } else {
-            output = getAmountOut(msg.jettonAmount, self.reserve1, self.reserve0);
+            amountOut = getAmountOut(msg.jettonAmount, self.reserve1, self.reserve0);
             tmpAmount1 = msg.jettonAmount;
         }
 
-        if ((self.totalSupplyLP <= 0) || (output <= 0) || (msg.minOutput >= output)) {
+        if ((self.totalSupplyLP <= 0) || (amountOut.out <= 0) || (msg.minOutput >= amountOut.out)) {
             message(MessageParameters{
                 to: self.routerAddress,
                 value: 0,
@@ -290,7 +295,8 @@ contract Pool {
 
         if (tmpAmount0 > 0) {
             self.reserve0 += msg.jettonAmount;
-            self.reserve1 -= output;
+            self.reserve1 -= (amountOut.out + amountOut.protocolFeeOut + amountOut.refFeeOut);
+            self.collectedToken1ProtocolFee += amountOut.protocolFeeOut;
 
             if ((self.reserve0 > MAX_COINS) || (self.reserve1 <= 0)) {
                 message(MessageParameters{
@@ -310,10 +316,27 @@ contract Pool {
                 });
                 return;
             }
+            if (mode == SendDefaultMode) {
+                message(MessageParameters{
+                    to: self.routerAddress,
+                    value: gas,
+                    mode: mode,
+                    bounce: false,
+                    body: PayTo{
+                        queryId: msg.queryId,
+                        toAddress: msg.refAddress,
+                        exitCode: SWAP_OK_REF,
+                        amount0Out: 0,
+                        token0Address: self.token0Address,
+                        amount1Out: amountOut.refFeeOut,
+                        token1Address: self.token1Address,
+                    }.toCell()
+                });
+            }
             message(MessageParameters{
                 to: self.routerAddress,
-                value: 0,
-                mode: SendRemainingValue,
+                value: gas,
+                mode: mode,
                 bounce: false,
                 body: PayTo{
                     queryId: msg.queryId,
@@ -321,13 +344,14 @@ contract Pool {
                     exitCode: SWAP_OK,
                     amount0Out: 0,
                     token0Address: self.token0Address,
-                    amount1Out: output,
+                    amount1Out: amountOut.out,
                     token1Address: self.token1Address,
                 }.toCell()
             });
         } else {
             self.reserve1 += msg.jettonAmount;
-            self.reserve0 -= output;
+            self.reserve0 -= (amountOut.out + amountOut.protocolFeeOut + amountOut.refFeeOut);
+            self.collectedToken0ProtocolFee += amountOut.protocolFeeOut;
 
             if ((self.reserve1 > MAX_COINS) || (self.reserve0 <= 0)) {
                 message(MessageParameters{
@@ -347,16 +371,34 @@ contract Pool {
                 });
                 return;
             }
+
+            if (mode == SendDefaultMode) {
+                message(MessageParameters{
+                    to: self.routerAddress,
+                    value: gas,
+                    mode: mode,
+                    bounce: false,
+                    body: PayTo{
+                        queryId: msg.queryId,
+                        toAddress: msg.refAddress,
+                        exitCode: SWAP_OK_REF,
+                        amount0Out: amountOut.refFeeOut,
+                        token0Address: self.token0Address,
+                        amount1Out: 0,
+                        token1Address: self.token1Address,
+                    }.toCell()
+                });
+            }
             message(MessageParameters{
                 to: self.routerAddress,
-                value: 0,
-                mode: SendRemainingValue,
+                value: gas,
+                mode: mode,
                 bounce: false,
                 body: PayTo{
                     queryId: msg.queryId,
                     toAddress: msg.fromAddress,
                     exitCode: SWAP_OK,
-                    amount0Out: output,
+                    amount0Out: amountOut.out,
                     token0Address: self.token0Address,
                     amount1Out: 0,
                     token1Address: self.token1Address,

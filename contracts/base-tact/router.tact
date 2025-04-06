@@ -2,18 +2,20 @@ import "./pool";
 import "./messages";
 
 
+
 // TODO
 inline fun getPoolStateInit(token0Address: Address, token1Address: Address): StateInit {
     return initOf Pool(
         myAddress(), // routerAddress
-        // 0,           // lp_fee
-        // 0,           // ref_fee
+        20,           // lp_fee
+        10,           // protocolFee
+        10,           // ref_fee
         token0Address, // token0Address
         token1Address, // token1Address
         0,           // totalSupplyLP
-        // 0,           // collected_token0_protocol_fee
-        // 0,           // collected_token1_protocol_fee
-        // ?,           // protocol_fee_address
+        0,           // collected_token0_protocol_fee
+        0,           // collected_token1_protocol_fee
+        HOLE_ADDRESS,           // protocol_fee_address
         0,           // reserve0
         0,           // reserve1
     );
@@ -25,61 +27,60 @@ inline fun getPoolAddress(token0Address: Address, token1Address: Address): Addre
 
 
 contract Router {
-    // isLocked: Bool;
+    isLocked: Bool;
     adminAddress: Address;
-    // jetton_lp_wallet_code: Cell; 
-    // pool_code: Cell;
-    // lp_account_code: Cell; 
-    // temp_upgrade: Cell;
-    receive(adminAddress: Address){
+
+    receive(adminAddress: Address, isLocked: Bool){
         self.adminAddress = adminAddress;
+        self.isLocked = isLocked;
     }
 
     receive(msg: PayTo) {
-        // let gasRequired = get_gas_fee(20000, WORKCHAIN); // TODO
+        let gasRequired = getGasFee(20000, WORKCHAIN); 
         let msgValue = context().value;
-        // throwUnless(INSUFFICIENT_GAS, msgValue > gasRequired);
+        throwUnless(INSUFFICIENT_GAS, msgValue > gasRequired);
+
         let poolAddress = getPoolAddress(msg.token0Address, msg.token1Address);
         throwUnless(INVALID_CALLER, poolAddress == sender());
 
-        let tonAmount = 0;
-        let messageMode = SendRemainingValue;
+        let gas = 0;
+        let mode = SendRemainingValue;
         if ((msg.amount0Out > 0) && (msg.amount1Out > 0)) {
-            // tonAmount = (msgValue - gasRequired) / 2;
-            tonAmount = msgValue / 2;
-            messageMode = SendDefaultMode;
+            gas = (msgValue - gasRequired) / 2;
+            // gas = msgValue / 2;
+            mode = SendDefaultMode;
         }
         if (msg.amount0Out > 0) {
             message(MessageParameters{
                 to: msg.token0Address,
-                value: tonAmount,
-                mode: messageMode,
+                value: gas,
+                mode: mode,
                 bounce: false, // ?
                 body: JettonTransfer {
                     queryId: msg.queryId,
                     amount: msg.amount0Out,
                     destination: msg.toAddress,
                     responseDestination: msg.toAddress,
-                    customPayload: null, // .store_uint(0, 1);
+                    customPayload: null,
                     forwardTonAmount: 0,
-                    forwardPayload: emptySlice(), // .store_uint(0, 1);
+                    forwardPayload: emptySlice(),
                 }.toCell()
             });
         }
         if (msg.amount1Out > 0) {
             message(MessageParameters{
                 to: msg.token1Address,
-                value: tonAmount,
-                mode: messageMode,
-                bounce: false, // ?
+                value: gas,
+                mode: mode,
+                bounce: false, 
                 body: JettonTransfer {
                     queryId: msg.queryId,
                     amount: msg.amount1Out,
                     destination: msg.toAddress,
                     responseDestination: msg.toAddress,
-                    customPayload: null, // .store_uint(0, 1);
+                    customPayload: null,
                     forwardTonAmount: 0,
-                    forwardPayload: emptySlice(), // .store_uint(0, 1);
+                    forwardPayload: emptySlice(),
                 }.toCell()
             });
         }
@@ -92,7 +93,7 @@ contract Router {
         let token1Address: Address = payload.loadAddress();
         let ctx: Context = context();
         let fwdFee = ctx.readForwardFee();
-        if ((fwdFee * 6 > ctx.value) || token1Address == ctx.sender) { // || self.isLocked) {
+        if ((fwdFee * 6 > ctx.value) || token1Address == ctx.sender || self.isLocked) {
             // let exitCode: Slice as remaining = "";
             // if (self.isLocked) {
             //     exitCode = transfer_bounce_locked;
@@ -117,11 +118,8 @@ contract Router {
         } else {
             if (opcode == SWAP) {
                 let toAddress = payload.loadAddress();
-                let minOutput = payload.loadCoins();   
-                // let swapPayload: SwapPayload = SwapPayload.fromSlice(msg.forwardPayload);
-                // if (swapPayload.hasRef) {
-                //     swapPayload.refAddress = msg.sender;
-                // }
+                let minOutput = payload.loadCoins(); 
+                let hasRef = payload.loadUint(1);  
 
                 let poolAddress: Address = getPoolAddress(ctx.sender, token1Address);
                 message(MessageParameters{
@@ -135,102 +133,116 @@ contract Router {
                         tokenWallet: ctx.sender,
                         jettonAmount: msg.amount,
                         minOutput: minOutput, // swapPayload.minOutput,
-                        // hasRef: swapPayload.hasRef,
-                        // refAddress: msg.sender
+                        hasRef: hasRef,
+                        fromRealUser: msg.sender,
+                        refAddress: hasRef ? payload.loadAddress() : null,
                     }.toCell()
                 });
             } else if (opcode == PROVIDE_LP) {
                 // let transferredMsg: ProvideLP = ProvideLP.fromSlice(payload);
                 let minLPOut: Int = payload.loadCoins();
                 let poolAddress: Address = getPoolAddress(ctx.sender, token1Address);
-                message(MessageParameters{
-                    to: poolAddress,
-                    value: 0,
-                    mode: SendRemainingValue,
-                    bounce: false,
-                    body: ProvideLP {
-                        queryId: msg.queryId,
-                        fromUser: msg.sender,
-                        minLPOut: minLPOut,
-                        amount0: msg.amount, // 0
-                        amount1: 0 // msg.amount
-                    }.toCell()
-                });    
+                if (ctx.sender.asSlice().hash() > token1Address.asSlice().hash()) {
+                    message(MessageParameters{
+                        to: poolAddress,
+                        value: 0,
+                        mode: SendRemainingValue,
+                        bounce: false,
+                        body: ProvideLP {
+                            queryId: msg.queryId,
+                            fromUser: msg.sender,
+                            minLPOut: minLPOut,
+                            amount0: msg.amount, // 0
+                            amount1: 0 // msg.amount
+                        }.toCell()
+                    }); 
+                } else {
+                    message(MessageParameters{
+                        to: poolAddress,
+                        value: 0,
+                        mode: SendRemainingValue,
+                        bounce: false,
+                        body: ProvideLP {
+                            queryId: msg.queryId,
+                            fromUser: msg.sender,
+                            minLPOut: minLPOut,
+                            amount0: 0,
+                            amount1: msg.amount
+                        }.toCell()
+                    }); 
+                }  
             }
         }
     }  
     
 
-// TODO admin calls
-
     receive(msg: SetFees) {
-
         throwUnless(INVALID_CALLER, sender() == self.adminAddress);
-        let (newLpFee, newProtocolFee, newRefFee, newProtocolFeeAddress) = (msg.lpFee, msg.protocolFee, msg.refFee, msg.protocolFeeAddress);
-        let (jettonWallet0, jettonWallet1) = (msg.jettonWallet0, msg.jettonWallet1);
-        let (_, poolAddress) = getPoolStateInitAndAddress(jettonWallet0, jettonWallet1);
-        
-        let body = beginCell()
-            .store_uint(set_fees, 32)
-            .store_uint(query_id, 64)
-            .store_uint(newLpFee, 8)
-            .store_uint(newProtocolFee, 8)
-            .store_uint(newRefFee, 8)
-            .store_slice(newProtocolFeeAddress);
-        send_simple_message(0, poolAddress, body.end_cell(), CARRY_REMAINING_GAS);
+        let poolAddress = getPoolAddress(msg.token0Address, msg.token1Address);
+        message(MessageParameters{
+            to: poolAddress,
+            value: 0,
+            mode: SendRemainingValue,
+            bounce: false,
+            body: CbSetFees {
+                queryId: msg.queryId,
+                newLPFee: msg.newLPFee,
+                newProtocolFee: msg.newProtocolFee,
+                newRefFee: msg.newRefFee,
+                newProtocolFeeAddress: msg.newProtocolFeeAddress,
+            }.toCell(),
+        });
     }
 
-    // receive(msg: CollectFees) {
-            // throwUnless(INVALID_CALLER, sender() == self.adminAddress);
+    receive(msg: CollectFees) {
+        throwUnless(INVALID_CALLER, sender() == self.adminAddress);
+        let poolAddress = getPoolAddress(msg.token0Address, msg.token1Address);
+        message(MessageParameters{
+            to: poolAddress,
+            value: 0,
+            mode: SendRemainingValue,
+            bounce: false,
+            body: CbCollectFees {
+                queryId: msg.queryId,
+            }.toCell(),
+        });
+    }
 
-    //     let (jettonWallet0, jettonWallet1) = (msg.jettonWallet0, msg.jettonWallet1);
-    //     let (_, poolAddress) = getPoolStateInitAndAddress(jettonWallet0, jettonWallet1);
-    //     let body = beginCell()
-    //         .store_uint(collect_fees, 32)
-    //         .store_uint(context().query_id, 64);
-    //     send_simple_message(0, poolAddress, body.end_cell(), CARRY_REMAINING_GAS);
-    // }
-
-    // receive(msg: Lock) {
-            // throwUnless(INVALID_CALLER, sender() == self.adminAddress);
-
-    //     self.isLocked = true;
-    // }
+    receive(msg: Lock) {
+        throwUnless(INVALID_CALLER, sender() == self.adminAddress);
+        self.isLocked = true;
+    }
     
-    // receive(msg: Unlock) {
-            // throwUnless(INVALID_CALLER, sender() == self.adminAddress);
-
-    //     self.isLocked = false;
-    // }
+    receive(msg: Unlock) {
+        throwUnless(INVALID_CALLER, sender() == self.adminAddress);
+        self.isLocked = false;
+    }
 
     
-    // receive(msg: ResetGas) {
-            // throwUnless(INVALID_CALLER, sender() == self.adminAddress);
+    receive(msg: ResetGas) {
+        throwUnless(INVALID_CALLER, sender() == self.adminAddress);
 
-    //     message(MessageParameters{
-    //          to: self.adminAddress
-    //          value: my_balance - REQUIRED_TON_RESERVE,
-    //          mode: SendDefaultMode,
-    //          bounce: false,
-    //          body: empty
-    //  });
-    // }
+        message(MessageParameters{
+             to: self.adminAddress
+             value: myBalance() - REQUIRED_TON_RESERVE,
+             mode: SendDefaultMode,
+             bounce: false,
+     });
+    }
     
-    // receive(msg: ResetPoolGas) {
-            // throwUnless(INVALID_CALLER, sender() == self.adminAddress);
-
-    //     let (jettonWallet0, jettonWallet1) = (msg.jettonWallet0, msg.jettonWallet1);
-    //     let (_, poolAddress) = getPoolStateInitAndAddress(jettonWallet0, jettonWallet1);
-    //     let body = beginCell().store_uint(reset_gas, 32).store_uint(context().query_id, 64);
-    //     send_simple_message(0, poolAddress, body.end_cell(), CARRY_REMAINING_GAS);
-        //     message(MessageParameters{
-    //          to: poolAddress
-    //          value: 0,
-    //          mode: SendRemainingValue,
-    //          bounce: false,
-    //          body: body
-    //  });
-    // }
+    receive(msg: ResetPoolGas) {
+        throwUnless(INVALID_CALLER, sender() == self.adminAddress);
+        let poolAddress = getPoolAddress(msg.token0Address, msg.token1Address);
+        message(MessageParameters{
+            to: poolAddress,
+            value: 0,
+            mode: SendRemainingValue,
+            bounce: false,
+            body: CbResetGas {
+                queryId: msg.queryId,
+            }.toCell(),
+        });
+    }
 
 
     get fun getPoolAddress(token0Address: Address, token1Address: Address): Address {

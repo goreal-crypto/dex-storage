@@ -37,8 +37,9 @@ message(0xaaaaaaa6) Swap {
     tokenWallet: Address;
     jettonAmount: Int as coins;
     minOutput: Int as coins;
-    // hasRef: Bool;
-    // refAddress: Address?;
+    hasRef: Bool;
+    fromRealUser: Address;
+    refAddress: Address?;
 }
 
 message(0xaaaaaaa7) ProvideLP {
@@ -111,15 +112,19 @@ message(0xd53276db) JettonExcesses {
     queryId: Int as uint64;
 }
 
+const WORKCHAIN: Int = 0;
 const MAX_COINS: Int = 1329227995784915872903807060280344575;
 const REQUIRED_MIN_LIQUIDITY: Int = 1000;
 const FEE_DIVIDER: Int = 10000;
+const HOLE_ADDRESS: Address = address("EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c");
 
-const SWAP: Int = 0xfffffffa;
-const PROVIDE_LP: Int = 0xfffffffb;
-const SWAP_REFUND_RESERVE_ERR: Int = 0xfffffffc;
-const SWAP_OK: Int = 0xfffffffd;
-const REFUND_OK: Int = 0xfffffffe;
+
+const SWAP: Int = 0xfffffff1;
+const PROVIDE_LP: Int = 0xfffffff2;
+const SWAP_REFUND_RESERVE_ERR: Int = 0xfffffff3;
+const SWAP_OK: Int = 0xfffffff4;
+const REFUND_OK: Int = 0xfffffff5;
+const SWAP_OK_REF: Int = 0xfffffff6;
 
 const WRONG_OP: Int = 1001;
 const ZERO_OUTPUT: Int = 1002;
