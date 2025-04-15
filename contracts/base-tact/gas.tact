@@ -10,7 +10,7 @@
 //   = GasLimitsPrices;
 
 
-inline fun getGasFee(gasAmount: Int, workchain: Int) {
+inline fun getGasFee(gasAmount: Int, workchain: Int): Int {
     let gasLimitsPrices: Slice = (workchain == -1 ? getConfigParam(20)!! : getConfigParam(21)!!).beginParse();
     let tag: Int = gasLimitsPrices.loadUint(8);
     let flatGasLimit: Int = 0;
@@ -22,7 +22,7 @@ inline fun getGasFee(gasAmount: Int, workchain: Int) {
 
         tag = gasLimitsPrices.loadUint(8);
     } 
-    if ((tag == 0xde) | (tag == 0xdd)) {
+    if ((tag == 0xde) || (tag == 0xdd)) {
         gasPrice = gasLimitsPrices.loadUint(64);
     } 
 
@@ -31,4 +31,4 @@ inline fun getGasFee(gasAmount: Int, workchain: Int) {
                (gasAmount - flatGasLimit) * (gasPrice >> 16) + flatGasPrice;
 }
 
-asm fun emptyAddress(): Address { b{00} PUSHSLICE }
+// asm fun emptyAddress(): Address { b{00} PUSHSLICE }

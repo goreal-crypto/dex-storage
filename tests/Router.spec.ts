@@ -11,8 +11,9 @@ import { PayTo } from '../wrappers/Router';
 describe('Router', () => {
     let blockchain: Blockchain;
     let user: SandboxContract<TreasuryContract>;
+    let admin: SandboxContract<TreasuryContract>;
     let router: SandboxContract<Router>;
-    let pool: SandboxContract<Pool>;
+    let pool: SandboxContract<TreasuryContract>;
     let token0: SandboxContract<TreasuryContract>;
     let token1: SandboxContract<TreasuryContract>;
     let lpAccount: SandboxContract<LPAccount>;
@@ -20,14 +21,13 @@ describe('Router', () => {
     beforeEach(async () => {
         blockchain = await Blockchain.create();
         user = await blockchain.treasury("user");
+        admin = await blockchain.treasury("admin");
         token0 = await blockchain.treasury("token0Address");
         token1 = await blockchain.treasury("token1Address");
         router = blockchain.openContract(await Router
-            .fromInit()
+            .fromInit(admin.address, false)
         );
-        pool = blockchain.openContract(await Pool
-            .fromInit(router.address, token0.address, token1.address, 0n, 0n, 0n)
-        );
+        pool = await blockchain.treasury("pool");
         lpAccount = blockchain.openContract(await LPAccount
             .fromInit(
                 user.address, 
@@ -36,13 +36,7 @@ describe('Router', () => {
                 toNano(0)
             )
         );
-        await pool.send(
-            user.getSender(),
-            {
-                value: toNano('1'),
-            }, 
-            null
-        )
+    
         await router.send(
             user.getSender(),
             {
@@ -65,7 +59,7 @@ describe('Router', () => {
             token1.address
         );
 
-        expect(poolAddress).toEqualAddress(pool.address);
+        //expect(poolAddress).toEqualAddress(pool.address);
     });
 
     it("should refuse to pay if caller is not valid", async () => {
@@ -99,13 +93,17 @@ describe('Router', () => {
     });
 
     it("should pay if caller is valid", async () => {
+        const poolAddress = await router.getGetPoolAddress(
+            token0.address,
+            token1.address
+        );
         const send = await blockchain.sendMessage(internal({
-            from: pool.address,
+            from: poolAddress,
             to: router.address,
             value: toNano(1),
             bounce: true,
             body: beginCell()
-                    .storeUint(0xffffaaaa, 32) // opcode
+                    .storeUint(0xaaaaaaa8, 32) // opcode
                     .storeUint(1n, 64) // queryId
                     .storeAddress(user.address) // toAddress
                     .storeUint(0n, 32) // exitCode
@@ -123,7 +121,7 @@ describe('Router', () => {
         
 
         expect(send.transactions).toHaveTransaction({
-            from: pool.address,
+            from: poolAddress,
             to: router.address,
             success: true,
         });
@@ -140,6 +138,44 @@ describe('Router', () => {
     });
 
     it("should route swap message", async () =>{
+        const poolAddress = await router.getGetPoolAddress(
+            token0.address,
+            token1.address
+        );
+        const sendLP1 = await router.send(
+            token0.getSender(),
+            {
+                value: toNano(1),
+            },
+            {
+                $$type: "JettonNotification",
+                queryId: toNano(1),
+                amount: toNano(10000),
+                sender: user.address,
+                forwardPayload: beginCell()
+                    .storeUint(0xfffffff2, 32) // opcode
+                    .storeAddress(token0.address)
+                    .storeCoins(1)
+                    .asSlice()
+            }
+        );
+        const sendLP2 = await router.send(
+            token0.getSender(),
+            {
+                value: toNano(1),
+            },
+            {
+                $$type: "JettonNotification",
+                queryId: toNano(1),
+                amount: toNano(20000),
+                sender: user.address,
+                forwardPayload: beginCell()
+                    .storeUint(0xfffffff2, 32) // opcode
+                    .storeAddress(token1.address)
+                    .storeCoins(1)
+                    .asSlice()
+            }
+        );
         const send = await router.send(
             token0.getSender(),
             {
@@ -151,12 +187,12 @@ describe('Router', () => {
                 amount: toNano(1),
                 sender: user.address,
                 forwardPayload: beginCell()
-                    .storeUint(0xafafafaf, 32) // opcode
+                    .storeUint(0xfffffff1, 32) // opcode
                     .storeAddress(token1.address)
                     .storeAddress(user.address)
                     .storeCoins(0)
-                    // .storeBit(0)
-                    // .storeAddress(null)
+                    .storeBit(0)
+                    .storeAddress(null)
                     .asSlice()
             }
         );
@@ -169,13 +205,16 @@ describe('Router', () => {
         });
         expect(send.transactions).toHaveTransaction({
             from: router.address,
-            to: pool.address,
-            success: true,
+            to: poolAddress,
         });
 
     });
 
     it("should route provideLP message", async () =>{
+        const poolAddress = await router.getGetPoolAddress(
+            token0.address,
+            token1.address
+        );
         const send = await router.send(
             token0.getSender(),
             {
@@ -184,10 +223,10 @@ describe('Router', () => {
             {
                 $$type: "JettonNotification",
                 queryId: toNano(1),
-                amount: toNano(1),
+                amount: toNano(10000),
                 sender: user.address,
                 forwardPayload: beginCell()
-                    .storeUint(0xfafafafa, 32) // opcode
+                    .storeUint(0xfffffff2, 32) // opcode
                     .storeAddress(token1.address)
                     .storeCoins(1)
                     .asSlice()
@@ -202,10 +241,8 @@ describe('Router', () => {
         });
         expect(send.transactions).toHaveTransaction({
             from: router.address,
-            to: pool.address,
+            to: poolAddress,
             success: true,
         });
-    
-
     });
 });

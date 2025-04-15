@@ -3,26 +3,6 @@ import "./messages";
 import "./lp_wallet";
 import "./gas";
 
-inline fun getLPAccountStateInit(userAddress: Address, poolAddress: Address): StateInit {
-    return initOf LPAccount(
-        userAddress,
-        poolAddress,
-        0,
-        0
-    );
-}
-
-inline fun getLPAccountAddress(userAddress: Address, poolAddress: Address): Address {
-    return contractAddress(getLPAccountStateInit(userAddress, poolAddress));
-}
-
-struct AmountOut {
-    out: Int as coins; 
-    protocolFeeOut: Int as coins;
-    refFeeOut: Int as coins;
-}
-
-
 contract Pool {
     routerAddress: Address;
     LPFee: Int as uint8;
@@ -39,17 +19,17 @@ contract Pool {
 
     init(
         routerAddress: Address,
-        LPFee: Int as uint8,
-        protocolFee: Int as uint8,
-        refFee: Int as uint8,
+        LPFee: Int,
+        protocolFee: Int,
+        refFee: Int,
         token0Address: Address,
         token1Address: Address,
-        totalSupplyLP: Int as coins,
-        collectedToken0ProtocolFee: Int as coins,
-        collectedToken1ProtocolFee: Int as coins,
+        totalSupplyLP: Int,
+        collectedToken0ProtocolFee: Int,
+        collectedToken1ProtocolFee: Int,
         protocolFeeAddress: Address,
-        reserve0: Int as coins,
-        reserve1: Int as coins
+        reserve0: Int,
+        reserve1: Int,
     ) {
         self.routerAddress = routerAddress;
         self.LPFee = LPFee;
@@ -68,14 +48,14 @@ contract Pool {
     receive(){}
 
 
-    inline fun getAmountOut(hasRef: Bool, amountIn: Int, reserveIn: Int, reserveOut: Int): AmountOut {
+    fun getAmountOut(hasRef: Bool, amountIn: Int, reserveIn: Int, reserveOut: Int): AmountOut {
         // let baseOut: Int = (amountIn * reserveOut) / (reserveIn + amountIn);
         let amountInWithFee: Int = amountIn * (FEE_DIVIDER - self.LPFee);
         let baseOut: Int = (amountInWithFee * reserveOut) / (reserveIn * FEE_DIVIDER + amountInWithFee);
         let protocolFeeOut: Int = 0;
         let refFeeOut: Int = 0;
         if (self.protocolFee > 0) {
-            protocolFeeOut =  divc(baseOut * self.protocol_fee, FEE_DIVIDER)
+            protocolFeeOut =  divc(baseOut * self.protocolFee, FEE_DIVIDER)
         }
         if (hasRef && (self.refFee > 0)) {
             refFeeOut = divc(baseOut * self.refFee, FEE_DIVIDER);
@@ -90,45 +70,63 @@ contract Pool {
         };
     }
 
-    // receive(msg: JettonBurnNotification) {
-//         // throwUnless(INSUFFICIENT_GAS, (msg_value > gas_required) & (msg_value > cs~load_coins() * 6));
-//         // throwUnless(INVALID_CALLER, equal_slices(calculate_user_jetton_lp_wallet_address(from_address, my_address(), storage::jetton_lp_wallet_code), sender_address));
-//         throwUnless(ZERO_OUTPUT, msg.jetton_amount > 0);
-//         let amount0_out = (msg.jetton_amount * self.reserve0) / self.total_supply_lp;
-//         let amount1_out = (msg.jetton_amount * self.reserve1) / self.total_supply_lp;
-//         throwUnless(ZERO_OUTPUT, (amount0_out > 0) && (amount1_out > 0));
-//         self.reserve0 -= amount0_out;
-//         self.reserve1 -= amount1_out;
-//         self.total_supply_lp -= msg.jetton_amount;
+    receive(msg: JettonBurnNotification) {
+        let gasRequired = getGasFee(25000, WORKCHAIN);
+        let ctx = context();
+        let msgValue = ctx.value;
+        throwUnless(INSUFFICIENT_GAS, (msgValue > gasRequired) && (msgValue > ctx.readForwardFee()));
+        let LPWalletAddress = contractAddress(getLPWalletStateInit(msg.sender, myAddress()));
+        throwUnless(INVALID_CALLER, sender() == LPWalletAddress);
+        throwUnless(ZERO_OUTPUT, msg.amount > 0);
+        let amount0Out = (msg.amount * self.reserve0) / self.totalSupplyLP;
+        let amount1Out = (msg.amount * self.reserve1) / self.totalSupplyLP;
+        throwUnless(ZERO_OUTPUT, (amount0Out > 0) && (amount1Out > 0));
+        self.reserve0 -= amount0Out;
+        self.reserve1 -= amount1Out;
+        self.totalSupplyLP -= msg.amount;
         
-//         let gas = 0;
-//         let mode = SendRemainingValue;
-//         // TODO: send excesses
-
-//         message(MessageParamaters{
-//             to: self.router_address,
-//             value: gas,
-//             mode: mode,
-//             bounce: false,
-//             body: PayTo{
-//                 query_id: msg.query_id,
-//                 exit_code: , // TODO
-//                 to_address: msg.from_address,
-//                 amount0: amount0_out,
-//                 token0Address: self.token0Address,
-//                 amount1: amount1_out,
-//                 token1Address: self.token1Address,
-//             }.toCell()
-//         });
-//     }
+        let gas = 0;
+        let mode = SendRemainingValue;
+        if (msg.responseDestination != null) {
+            gas = (msgValue - gasRequired) / 2;
+            mode = SendDefaultMode;
+            message(MessageParameters{
+                to: msg.responseDestination!!,
+                value: gas,
+                mode: mode,
+                bounce: false,
+                body: JettonExcesses{
+                    queryId: msg.queryId,
+                }.toCell()
+            });
+        }
+        message(MessageParameters{
+            to: self.routerAddress,
+            value: gas,
+            mode: mode,
+            bounce: false,
+            body: PayTo{
+                queryId: msg.queryId,
+                toAddress: msg.sender,
+                exitCode: BURN_OK,
+                amount0Out: amount0Out,
+                token0Address: self.token0Address,
+                amount1Out: amount1Out,
+                token1Address: self.token1Address,
+            }.toCell()
+        });
+    }
 
     receive(msg: CbAddLiquidity) {
+        let LPAccountStateInit: StateInit = getLPAccountStateInit(msg.userAddress, myAddress());
+        let LPAccountAddress: Address = contractAddress(LPAccountStateInit);
+        throwUnless(INVALID_CALLER, sender() == LPAccountAddress);
+
         let liquidity: Int = 0;
-        let to: Address; 
+        let to: Address = emptyAddress(); 
 
         if (self.totalSupplyLP == 0) {
             liquidity = sqrt(msg.amount0 * msg.amount1) / REQUIRED_MIN_LIQUIDITY;
-            to = emptyAddress() 
         } else {
             let toMint0 = (msg.amount0 * self.totalSupplyLP) / self.reserve0;
             let toMint1 = (msg.amount1 * self.totalSupplyLP) / self.reserve1;
@@ -141,9 +139,8 @@ contract Pool {
         self.totalSupplyLP += liquidity;
 
         if ((liquidity < msg.minLPOut) || ((self.reserve0 > MAX_COINS) || (self.reserve1 > MAX_COINS))) {
-
-            message(MessageParameters{
-                to: sender(),
+            deploy(DeployParameters{
+                init: LPAccountStateInit,
                 value: 0,
                 bounce: false,
                 mode: SendRemainingValue,
@@ -155,9 +152,9 @@ contract Pool {
                 }.toCell()
             });
         } else {
-            let lpWalletAddress = getLPWalletAddress(to, myAddress());
-            message(MessageParameters{
-                to: lpWalletAddress,
+            let LPWalletStateInit = getLPWalletStateInit(to, myAddress());
+            deploy(DeployParameters{
+                init: LPWalletStateInit,
                 value: 0,
                 mode: SendRemainingValue,
                 bounce: false,
@@ -174,7 +171,7 @@ contract Pool {
     }
 
     receive(msg: CbRefundMe) {
-        let lpAccountAddress = getLPAccountAddress(msg.userAddress, myAddress());
+        let lpAccountAddress = contractAddress(getLPAccountStateInit(msg.userAddress, myAddress()));
         throwUnless(INVALID_CALLER, lpAccountAddress == sender());
         message(MessageParameters{
             to: self.routerAddress,
@@ -192,12 +189,189 @@ contract Pool {
             }.toCell()
         });
     }
-    
-    receive(msg: CollectFees) {
+
+    receive(msg: Swap) {
+        throwUnless(WRONG_CALLER, sender() == self.routerAddress);
+
+        let refAddress: Address = emptyAddress();
+        let tmpAmount0: Int = 0;
+        let tmpAmount1: Int = 0;
+
+        let mode = SendRemainingValue;
+        let gas: Int = 0;
+
+        let amountOut: AmountOut = AmountOut{out: 0, protocolFeeOut: 0, refFeeOut: 0};
+
+        if (msg.hasRef) {
+            mode = SendDefaultMode;
+            gas = (context().value - getGasFee(25000, WORKCHAIN)) / 2;
+            refAddress = msg.refAddress!!;
+        }
+
+        if (msg.tokenWallet == self.token0Address) {
+            amountOut = self.getAmountOut(msg.hasRef, msg.jettonAmount, self.reserve0, self.reserve1);
+            tmpAmount0 = msg.jettonAmount;
+        } else {
+            amountOut = self.getAmountOut(msg.hasRef, msg.jettonAmount, self.reserve1, self.reserve0);
+            tmpAmount1 = msg.jettonAmount;
+        }
+
+        if ((self.totalSupplyLP <= 0) || (amountOut.out <= 0) || (msg.minOutput >= amountOut.out)) {
+            message(MessageParameters{
+                to: self.routerAddress,
+                value: 0,
+                mode: SendRemainingValue,
+                bounce: false,
+                body: PayTo{
+                    queryId: msg.queryId,
+                    toAddress: msg.fromRealUser,
+                    exitCode: SWAP_REFUND_NO_LIQ,
+                    amount0Out: tmpAmount0,
+                    token0Address: self.token0Address,
+                    amount1Out: tmpAmount1,
+                    token1Address: self.token1Address,
+                }.toCell()
+            });
+            return;
+        }
+
+        if (tmpAmount0 > 0) {
+            self.reserve0 += msg.jettonAmount;
+            self.reserve1 -= (amountOut.out + amountOut.protocolFeeOut + amountOut.refFeeOut);
+            self.collectedToken1ProtocolFee += amountOut.protocolFeeOut;
+
+            if ((self.reserve0 > MAX_COINS) || (self.reserve1 <= 0)) {
+                message(MessageParameters{
+                    to: self.routerAddress,
+                    value: 0,
+                    mode: SendRemainingValue,
+                    bounce: false,
+                    body: PayTo{
+                        queryId: msg.queryId,
+                        toAddress: msg.fromRealUser,
+                        exitCode: SWAP_REFUND_RESERVE_ERR,
+                        amount0Out: tmpAmount0,
+                        token0Address: self.token0Address,
+                        amount1Out: tmpAmount1,
+                        token1Address: self.token1Address,
+                    }.toCell()
+                });
+                return;
+            }
+            if (mode == SendDefaultMode) {
+                message(MessageParameters{
+                    to: self.routerAddress,
+                    value: gas,
+                    mode: mode,
+                    bounce: false,
+                    body: PayTo{
+                        queryId: msg.queryId,
+                        toAddress: msg.refAddress!!,
+                        exitCode: SWAP_OK_REF,
+                        amount0Out: 0,
+                        token0Address: self.token0Address,
+                        amount1Out: amountOut.refFeeOut,
+                        token1Address: self.token1Address,
+                    }.toCell()
+                });
+            }
+            message(MessageParameters{
+                to: self.routerAddress,
+                value: gas,
+                mode: mode,
+                bounce: false,
+                body: PayTo{
+                    queryId: msg.queryId,
+                    toAddress: msg.fromAddress,
+                    exitCode: SWAP_OK,
+                    amount0Out: 0,
+                    token0Address: self.token0Address,
+                    amount1Out: amountOut.out,
+                    token1Address: self.token1Address,
+                }.toCell()
+            });
+        } else {
+            self.reserve1 += msg.jettonAmount;
+            self.reserve0 -= (amountOut.out + amountOut.protocolFeeOut + amountOut.refFeeOut);
+            self.collectedToken0ProtocolFee += amountOut.protocolFeeOut;
+
+            if ((self.reserve1 > MAX_COINS) || (self.reserve0 <= 0)) {
+                message(MessageParameters{
+                    to: self.routerAddress,
+                    value: 0,
+                    mode: SendRemainingValue,
+                    bounce: false,
+                    body: PayTo{
+                        queryId: msg.queryId,
+                        toAddress: msg.fromRealUser,
+                        exitCode: SWAP_REFUND_RESERVE_ERR,
+                        amount0Out: tmpAmount0,
+                        token0Address: self.token0Address,
+                        amount1Out: tmpAmount1,
+                        token1Address: self.token1Address,
+                    }.toCell()
+                });
+                return;
+            }
+
+            if (mode == SendDefaultMode) {
+                message(MessageParameters{
+                    to: self.routerAddress,
+                    value: gas,
+                    mode: mode,
+                    bounce: false,
+                    body: PayTo{
+                        queryId: msg.queryId,
+                        toAddress: msg.refAddress!!,
+                        exitCode: SWAP_OK_REF,
+                        amount0Out: amountOut.refFeeOut,
+                        token0Address: self.token0Address,
+                        amount1Out: 0,
+                        token1Address: self.token1Address,
+                    }.toCell()
+                });
+            }
+            message(MessageParameters{
+                to: self.routerAddress,
+                value: gas,
+                mode: mode,
+                bounce: false,
+                body: PayTo{
+                    queryId: msg.queryId,
+                    toAddress: msg.fromAddress,
+                    exitCode: SWAP_OK,
+                    amount0Out: amountOut.out,
+                    token0Address: self.token0Address,
+                    amount1Out: 0,
+                    token1Address: self.token1Address,
+                }.toCell()
+            });
+        }
+    }
+
+    receive(msg: ProvideLP) {
+        throwUnless(WRONG_CALLER, sender() == self.routerAddress);
+        let LPAccountInit: StateInit = getLPAccountStateInit(msg.fromUser, myAddress());
+        deploy(DeployParameters{
+            init: LPAccountInit,
+            value: 0,
+            mode: SendRemainingValue,
+            bounce: false,
+            body: AddLiquidity{
+                queryId: msg.queryId,
+                newAmount0: msg.amount0,
+                newAmount1: msg.amount1,
+                minLPOut: msg.minLPOut,
+            }.toCell()
+        }); 
+    }
+
+
+    receive(msg: UserCollectFees) {
         throwUnless(NO_LIQUIDITY, self.totalSupplyLP > REQUIRED_MIN_LIQUIDITY);
         throwUnless(LOW_LIQUIDITY, (self.collectedToken0ProtocolFee > REQUIRED_MIN_COLLECT_FEES) &&
                                    (self.collectedToken1ProtocolFee > REQUIRED_MIN_COLLECT_FEES));
-
+        throwUnless(INVALID_RECIPIENT, self.protocolFeeAddress != HOLE_ADDRESS);
         let msgValue = context().value;
         let gasRequired = getGasFee(40000, WORKCHAIN);
         throwUnless(INSUFFICIENT_GAS, (msgValue - gasRequired) > 1000000000); // 1 ton
@@ -248,189 +422,58 @@ contract Pool {
 
     }
 
-    receive(msg: Swap) {
+    receive(msg: RouterCollectFees) {
         throwUnless(WRONG_CALLER, sender() == self.routerAddress);
-
-        let refAddress: Address = emptyAddress();
-        let tmpAmount0: Int = 0;
-        let tmpAmount1: Int = 0;
-
-        let mode = SendRemainingValue;
-        let gas: Int = 0;
-
-        let amountOut: AmountOut;
-
-        if (msg.hasRef) {
-            mode = SendDefaultMode;
-            gas = (context().value - getGasFee(25000, WORKCHAIN)) / 2;
-            refAddress = msg.refAddress!!;
-        }
-
-        if (msg.tokenWallet == self.token0Address) {
-            amountOut = getAmountOut(msg.jettonAmount, self.reserve0, self.reserve1);
-            tmpAmount0 = msg.jettonAmount;
-        } else {
-            amountOut = getAmountOut(msg.jettonAmount, self.reserve1, self.reserve0);
-            tmpAmount1 = msg.jettonAmount;
-        }
-
-        if ((self.totalSupplyLP <= 0) || (amountOut.out <= 0) || (msg.minOutput >= amountOut.out)) {
-            message(MessageParameters{
-                to: self.routerAddress,
-                value: 0,
-                mode: SendRemainingValue,
-                bounce: false,
-                body: PayTo{
-                    queryId: msg.queryId,
-                    toAddress: msg.fromAddress,
-                    exitCode: SWAP_REFUND_NO_LIQ,
-                    amount0Out: tmpAmount0,
-                    token0Address: self.token0Address,
-                    amount1Out: tmpAmount1,
-                    token1Address: self.token1Address,
-                }.toCell()
-            });
-            return;
-        }
-
-        if (tmpAmount0 > 0) {
-            self.reserve0 += msg.jettonAmount;
-            self.reserve1 -= (amountOut.out + amountOut.protocolFeeOut + amountOut.refFeeOut);
-            self.collectedToken1ProtocolFee += amountOut.protocolFeeOut;
-
-            if ((self.reserve0 > MAX_COINS) || (self.reserve1 <= 0)) {
-                message(MessageParameters{
-                    to: self.routerAddress,
-                    value: 0,
-                    mode: SendRemainingValue,
-                    bounce: false,
-                    body: PayTo{
-                        queryId: msg.queryId,
-                        toAddress: msg.fromAddress,
-                        exitCode: SWAP_REFUND_RESERVE_ERR,
-                        amount0Out: tmpAmount0,
-                        token0Address: self.token0Address,
-                        amount1Out: tmpAmount1,
-                        token1Address: self.token1Address,
-                    }.toCell()
-                });
-                return;
-            }
-            if (mode == SendDefaultMode) {
-                message(MessageParameters{
-                    to: self.routerAddress,
-                    value: gas,
-                    mode: mode,
-                    bounce: false,
-                    body: PayTo{
-                        queryId: msg.queryId,
-                        toAddress: msg.refAddress,
-                        exitCode: SWAP_OK_REF,
-                        amount0Out: 0,
-                        token0Address: self.token0Address,
-                        amount1Out: amountOut.refFeeOut,
-                        token1Address: self.token1Address,
-                    }.toCell()
-                });
-            }
-            message(MessageParameters{
-                to: self.routerAddress,
-                value: gas,
-                mode: mode,
-                bounce: false,
-                body: PayTo{
-                    queryId: msg.queryId,
-                    toAddress: msg.fromAddress,
-                    exitCode: SWAP_OK,
-                    amount0Out: 0,
-                    token0Address: self.token0Address,
-                    amount1Out: amountOut.out,
-                    token1Address: self.token1Address,
-                }.toCell()
-            });
-        } else {
-            self.reserve1 += msg.jettonAmount;
-            self.reserve0 -= (amountOut.out + amountOut.protocolFeeOut + amountOut.refFeeOut);
-            self.collectedToken0ProtocolFee += amountOut.protocolFeeOut;
-
-            if ((self.reserve1 > MAX_COINS) || (self.reserve0 <= 0)) {
-                message(MessageParameters{
-                    to: self.routerAddress,
-                    value: 0,
-                    mode: SendRemainingValue,
-                    bounce: false,
-                    body: PayTo{
-                        queryId: msg.queryId,
-                        toAddress: msg.fromAddress,
-                        exitCode: SWAP_REFUND_RESERVE_ERR,
-                        amount0Out: tmpAmount0,
-                        token0Address: self.token0Address,
-                        amount1Out: tmpAmount1,
-                        token1Address: self.token1Address,
-                    }.toCell()
-                });
-                return;
-            }
-
-            if (mode == SendDefaultMode) {
-                message(MessageParameters{
-                    to: self.routerAddress,
-                    value: gas,
-                    mode: mode,
-                    bounce: false,
-                    body: PayTo{
-                        queryId: msg.queryId,
-                        toAddress: msg.refAddress,
-                        exitCode: SWAP_OK_REF,
-                        amount0Out: amountOut.refFeeOut,
-                        token0Address: self.token0Address,
-                        amount1Out: 0,
-                        token1Address: self.token1Address,
-                    }.toCell()
-                });
-            }
-            message(MessageParameters{
-                to: self.routerAddress,
-                value: gas,
-                mode: mode,
-                bounce: false,
-                body: PayTo{
-                    queryId: msg.queryId,
-                    toAddress: msg.fromAddress,
-                    exitCode: SWAP_OK,
-                    amount0Out: amountOut.out,
-                    token0Address: self.token0Address,
-                    amount1Out: 0,
-                    token1Address: self.token1Address,
-                }.toCell()
-            });
-        }
-    }
-
-    receive(msg: ProvideLP) {
-        throwUnless(WRONG_CALLER, sender() == self.routerAddress);
-        let lpAccountAddress: Address = getLPAccountAddress(msg.fromUser, myAddress());
+        throwUnless(NO_LIQUIDITY, (self.collectedToken0ProtocolFee > 0) &&
+                                  (self.collectedToken1ProtocolFee > 0));
+        throwUnless(INVALID_RECIPIENT, self.protocolFeeAddress != HOLE_ADDRESS);
+        
         message(MessageParameters{
-            to: lpAccountAddress,
+            to: self.routerAddress,
             value: 0,
             mode: SendRemainingValue,
-            bounce: false,
-            body: AddLiquidity{
+            bounce: true,
+            body: PayTo {
                 queryId: msg.queryId,
-                newAmount0: msg.amount0,
-                newAmount1: msg.amount1,
-                minLPOut: msg.minLPOut,
-            }.toCell()
-        }); 
+                toAddress: self.protocolFeeAddress,
+                exitCode: 0,
+                amount0Out: self.collectedToken0ProtocolFee,
+                token0Address: self.token0Address,
+                amount1Out: self.collectedToken1ProtocolFee,
+                token1Address: self.token1Address,
+            }.toCell(),
+        });
+
+        self.collectedToken0ProtocolFee = 0;
+        self.collectedToken1ProtocolFee = 0;
     }
 
+    receive(msg: PoolSetFees) {
+        throwUnless(WRONG_CALLER, sender() == self.routerAddress);
+        throwUnless(FEE_OUT_OF_RANGE, (MIN_FEE) <= msg.newLPFee && msg.newLPFee <= MAX_FEE);
+        throwUnless(FEE_OUT_OF_RANGE, (MIN_FEE) <= msg.newProtocolFee && msg.newProtocolFee <= MAX_FEE);
+        throwUnless(FEE_OUT_OF_RANGE, (MIN_FEE) <= msg.newRefFee && msg.newRefFee <= MAX_FEE);
 
-// TODO 
-//     receive(msg: ResetGas) {
+        self.LPFee = msg.newLPFee;
+        self.protocolFee = msg.newProtocolFee;
+        self.refFee = msg.newRefFee;
+        self.protocolFeeAddress = msg.newProtocolFeeAddress;
+    }
+}
 
-//     }
+inline fun getLPAccountStateInit(userAddress: Address, poolAddress: Address): StateInit {
+    return initOf LPAccount(
+        userAddress,
+        poolAddress,
+        0,
+        0
+    );
+}
 
-//     receive(msg: SetFees) {
-
-//     }
+inline fun getLPWalletStateInit(owner: Address, minter: Address): StateInit {
+    return initOf JettonWallet(
+        0,
+        owner,
+        minter,
+    );
 }

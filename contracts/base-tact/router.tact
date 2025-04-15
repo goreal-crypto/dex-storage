@@ -1,39 +1,16 @@
 import "./pool";
 import "./messages";
 
-
-
-// TODO
-inline fun getPoolStateInit(token0Address: Address, token1Address: Address): StateInit {
-    return initOf Pool(
-        myAddress(), // routerAddress
-        20,           // lp_fee
-        10,           // protocolFee
-        10,           // ref_fee
-        token0Address, // token0Address
-        token1Address, // token1Address
-        0,           // totalSupplyLP
-        0,           // collected_token0_protocol_fee
-        0,           // collected_token1_protocol_fee
-        HOLE_ADDRESS,           // protocol_fee_address
-        0,           // reserve0
-        0,           // reserve1
-    );
-}
-
-inline fun getPoolAddress(token0Address: Address, token1Address: Address): Address {
-    return contractAddress(getPoolStateInit(token0Address, token1Address));
-}
-
-
 contract Router {
     isLocked: Bool;
     adminAddress: Address;
 
-    receive(adminAddress: Address, isLocked: Bool){
+    init(adminAddress: Address, isLocked: Bool){
         self.adminAddress = adminAddress;
         self.isLocked = isLocked;
     }
+
+    receive() {}
 
     receive(msg: PayTo) {
         let gasRequired = getGasFee(20000, WORKCHAIN); 
@@ -55,7 +32,7 @@ contract Router {
                 to: msg.token0Address,
                 value: gas,
                 mode: mode,
-                bounce: false, // ?
+                bounce: false,
                 body: JettonTransfer {
                     queryId: msg.queryId,
                     amount: msg.amount0Out,
@@ -117,9 +94,9 @@ contract Router {
             });
         } else {
             if (opcode == SWAP) {
-                let toAddress = payload.loadAddress();
-                let minOutput = payload.loadCoins(); 
-                let hasRef = payload.loadUint(1);  
+                let toAddress: Address = payload.loadAddress();
+                let minOutput: Int = payload.loadCoins(); 
+                let hasRef: Bool = payload.loadUint(1) == 1;  
 
                 let poolAddress: Address = getPoolAddress(ctx.sender, token1Address);
                 message(MessageParameters{
@@ -129,22 +106,21 @@ contract Router {
                     bounce: false,
                     body: Swap {
                         queryId: msg.queryId,
-                        fromAddress: toAddress, // swapPayload.toAddress,
+                        fromAddress: toAddress,
                         tokenWallet: ctx.sender,
                         jettonAmount: msg.amount,
-                        minOutput: minOutput, // swapPayload.minOutput,
+                        minOutput: minOutput,
                         hasRef: hasRef,
                         fromRealUser: msg.sender,
                         refAddress: hasRef ? payload.loadAddress() : null,
                     }.toCell()
                 });
             } else if (opcode == PROVIDE_LP) {
-                // let transferredMsg: ProvideLP = ProvideLP.fromSlice(payload);
                 let minLPOut: Int = payload.loadCoins();
-                let poolAddress: Address = getPoolAddress(ctx.sender, token1Address);
+                let poolInit: StateInit = getPoolStateInit(ctx.sender, token1Address);
                 if (ctx.sender.asSlice().hash() > token1Address.asSlice().hash()) {
-                    message(MessageParameters{
-                        to: poolAddress,
+                    deploy(DeployParameters{
+                        init: poolInit,
                         value: 0,
                         mode: SendRemainingValue,
                         bounce: false,
@@ -152,13 +128,13 @@ contract Router {
                             queryId: msg.queryId,
                             fromUser: msg.sender,
                             minLPOut: minLPOut,
-                            amount0: msg.amount, // 0
-                            amount1: 0 // msg.amount
+                            amount0: msg.amount, 
+                            amount1: 0,
                         }.toCell()
                     }); 
                 } else {
-                    message(MessageParameters{
-                        to: poolAddress,
+                    deploy(DeployParameters{
+                        init: poolInit,
                         value: 0,
                         mode: SendRemainingValue,
                         bounce: false,
@@ -167,7 +143,7 @@ contract Router {
                             fromUser: msg.sender,
                             minLPOut: minLPOut,
                             amount0: 0,
-                            amount1: msg.amount
+                            amount1: msg.amount,
                         }.toCell()
                     }); 
                 }  
@@ -176,7 +152,7 @@ contract Router {
     }  
     
 
-    receive(msg: SetFees) {
+    receive(msg: RouterSetFees) {
         throwUnless(INVALID_CALLER, sender() == self.adminAddress);
         let poolAddress = getPoolAddress(msg.token0Address, msg.token1Address);
         message(MessageParameters{
@@ -184,7 +160,7 @@ contract Router {
             value: 0,
             mode: SendRemainingValue,
             bounce: false,
-            body: CbSetFees {
+            body: PoolSetFees {
                 queryId: msg.queryId,
                 newLPFee: msg.newLPFee,
                 newProtocolFee: msg.newProtocolFee,
@@ -194,7 +170,7 @@ contract Router {
         });
     }
 
-    receive(msg: CollectFees) {
+    receive(msg: RouterCollectFees) {
         throwUnless(INVALID_CALLER, sender() == self.adminAddress);
         let poolAddress = getPoolAddress(msg.token0Address, msg.token1Address);
         message(MessageParameters{
@@ -202,7 +178,7 @@ contract Router {
             value: 0,
             mode: SendRemainingValue,
             bounce: false,
-            body: CbCollectFees {
+            body: PoolCollectFees {
                 queryId: msg.queryId,
             }.toCell(),
         });
@@ -221,9 +197,8 @@ contract Router {
     
     receive(msg: ResetGas) {
         throwUnless(INVALID_CALLER, sender() == self.adminAddress);
-
         message(MessageParameters{
-             to: self.adminAddress
+             to: self.adminAddress,
              value: myBalance() - REQUIRED_TON_RESERVE,
              mode: SendDefaultMode,
              bounce: false,
@@ -238,7 +213,7 @@ contract Router {
             value: 0,
             mode: SendRemainingValue,
             bounce: false,
-            body: CbResetGas {
+            body: ResetGas {
                 queryId: msg.queryId,
             }.toCell(),
         });
@@ -248,4 +223,42 @@ contract Router {
     get fun getPoolAddress(token0Address: Address, token1Address: Address): Address {
         return getPoolAddress(token0Address, token1Address)
     }
+}
+
+inline fun getPoolStateInit(token0Address: Address, token1Address: Address): StateInit {
+    if (token0Address.asSlice().hash() > token1Address.asSlice().hash()) {
+        return initOf Pool(
+            myAddress(), // routerAddress
+            20,           // lp_fee
+            10,           // protocolFee
+            10,           // ref_fee
+            token0Address, // token0Address
+            token1Address, // token1Address
+            0,           // totalSupplyLP
+            0,           // collected_token0_protocol_fee
+            0,           // collected_token1_protocol_fee
+            HOLE_ADDRESS,           // protocol_fee_address
+            0,           // reserve0
+            0,           // reserve1
+        );
+    } else {
+        return initOf Pool(
+            myAddress(), // routerAddress
+            20,           // lp_fee
+            10,           // protocolFee
+            10,           // ref_fee
+            token1Address, // token0Address
+            token0Address, // token1Address
+            0,           // totalSupplyLP
+            0,           // collected_token0_protocol_fee
+            0,           // collected_token1_protocol_fee
+            HOLE_ADDRESS,           // protocol_fee_address
+            0,           // reserve0
+            0,           // reserve1
+        );
+    }
+}
+
+inline fun getPoolAddress(token0Address: Address, token1Address: Address): Address {
+    return contractAddress(getPoolStateInit(token0Address, token1Address));
 }

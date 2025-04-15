@@ -10,7 +10,7 @@ import { PayTo } from '../wrappers/Router';
 describe('Router', () => {
     let blockchain: Blockchain;
     let user: SandboxContract<TreasuryContract>;
-    let router: SandboxContract<Router>;
+    let router: SandboxContract<TreasuryContract>;
     let pool: SandboxContract<Pool>;
     let token0: SandboxContract<TreasuryContract>;
     let token1: SandboxContract<TreasuryContract>;
@@ -22,16 +22,20 @@ describe('Router', () => {
         user = await blockchain.treasury("user");
         token0 = await blockchain.treasury("token0Address");
         token1 = await blockchain.treasury("token1Address");
-        router = blockchain.openContract(await Router
-            .fromInit()
-        );
+        router = await blockchain.treasury("router");
         pool = blockchain.openContract(await Pool
             .fromInit(
-                router.address, 
+                router.address,
+                20n,
+                0n,
+                10n, 
                 token0.address, 
                 token1.address, 
                 0n, 
                 0n, 
+                0n,
+                user.address,
+                0n,
                 0n
             )
         );
@@ -50,13 +54,6 @@ describe('Router', () => {
             }, 
             null
         )
-        await router.send(
-            user.getSender(),
-            {
-                value: toNano('1'),
-            }, 
-            null
-        )
         await lpAccount.send(
             user.getSender(),
             {
@@ -67,60 +64,48 @@ describe('Router', () => {
     });
 
     it("should accept ProvideLP message", async () => {
-        const send = await blockchain.sendMessage(internal({
-            from: router.address,
-            to: pool.address,
-            value: toNano(1000000n),
-            bounce: true,
-            body: beginCell()
-                    .storeUint(0xabababab, 32)
-                    .storeUint(1n, 64)
-                    .storeAddress(user.address)
-                    .storeCoins(1n)
-                    .storeCoins(1000n)
-                    .storeCoins(0n)
-                  .endCell()
-
-        }));
+        const send = await pool.send(
+            router.getSender(),
+            {
+                value: toNano(1)
+            },
+            {
+                $$type: "ProvideLP",
+                queryId: toNano(1),
+                fromUser: user.address,
+                minLPOut: toNano(1),
+                amount0: toNano(1000),
+                amount1: toNano(0)
+            }   
+        );
         console.log("should accept ProvideLP message 1");
 
         printTransactionFees(send.transactions);
 
-        expect(send.transactions).toHaveTransaction({
-            from: router.address,
-            to: pool.address,
-            success: true,
-        });
         expect(send.transactions).toHaveTransaction({
             from: pool.address,
             to: lpAccount.address,
             success: true,
         });
 
-        const send1 = await blockchain.sendMessage(internal({
-            from: router.address,
-            to: pool.address,
-            value: toNano(1000000n),
-            bounce: true,
-            body: beginCell()
-                    .storeUint(0xabababab, 32)
-                    .storeUint(1n, 64)
-                    .storeAddress(user.address)
-                    .storeCoins(1n)
-                    .storeCoins(0n)
-                    .storeCoins(1000n)
-                  .endCell()
-
-        }));
+        const send1 = await pool.send(
+            router.getSender(),
+            {
+                value: toNano(1)
+            },
+            {
+                $$type: "ProvideLP",
+                queryId: toNano(1),
+                fromUser: user.address,
+                minLPOut: toNano(1),
+                amount0: toNano(0),
+                amount1: toNano(1000)
+            }   
+        );
 
         console.log("should accept ProvideLP message 2");
         printTransactionFees(send1.transactions);
 
-        expect(send1.transactions).toHaveTransaction({
-            from: router.address,
-            to: pool.address,
-            success: true,
-        });
         expect(send1.transactions).toHaveTransaction({
             from: pool.address,
             to: lpAccount.address,
@@ -130,20 +115,23 @@ describe('Router', () => {
     });
 
     it("should accept Swap message", async () => {
-        const send = await blockchain.sendMessage(internal({
-            from: router.address,
-            to: pool.address,
-            value: toNano(1000000n),
-            bounce: true,
-            body: beginCell()
-                    .storeUint(0xaaaaffff, 32)
-                    .storeUint(0n, 64)
-                    .storeAddress(user.address)
-                    .storeAddress(token1.address)
-                    .storeCoins(20000000000n)
-                    .storeCoins(200n)
-                  .endCell()
-        }));
+        const send = await pool.send(
+            router.getSender(),
+            {
+                value: toNano(1)
+            },
+            {
+                $$type: "Swap",
+                queryId: toNano(0),
+                fromAddress: user.address,
+                tokenWallet: token1.address,
+                jettonAmount: toNano(200000),
+                minOutput: toNano(200),
+                hasRef: false,
+                fromRealUser: user.address,
+                refAddress: null
+            }  
+        )
         console.log("should accept Swap message 1");
         printTransactionFees(send.transactions);
 
