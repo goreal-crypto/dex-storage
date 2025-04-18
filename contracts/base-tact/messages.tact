@@ -116,6 +116,33 @@ struct AmountOut {
     refFeeOut: Int as coins;
 }
 
+struct PoolData {
+    routerAddress: Address;
+    LPFee: Int as uint8;
+    protocolFee: Int as uint8;
+    refFee: Int as uint8;
+    token0Address: Address;
+    token1Address: Address;
+    totalSupplyLP: Int as coins; 
+    collectedToken0ProtocolFee: Int as coins;
+    collectedToken1ProtocolFee: Int as coins; 
+    protocolFeeAddress: Address;
+    reserve0: Int as coins;
+    reserve1: Int as coins; 
+}
+
+struct LPAccountData {
+    userAddress: Address;
+    poolAddress: Address;
+    amount0: Int as coins;
+    amount1: Int as coins;
+}
+
+struct Amounts {
+    amount0: Int as coins;
+    amount1: Int as coins;
+}
+
 // ============================================================
 // Jetton messages
 
@@ -216,3 +243,4 @@ const LOW_LIQUIDITY: Int = 1009;
 const REQUIRED_MIN_COLLECT_FEES: Int = 1010;
 const FEE_OUT_OF_RANGE: Int = 1011;
 const INVALID_RECIPIENT: Int = 1012;
+const INVALID_TOKEN: Int = 1013;

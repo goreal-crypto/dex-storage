@@ -459,6 +459,61 @@ contract Pool {
         self.refFee = msg.newRefFee;
         self.protocolFeeAddress = msg.newProtocolFeeAddress;
     }
+
+    get fun getPoolData(): PoolData {
+        return PoolData{
+            routerAddress: self.routerAddress,
+            LPFee: self.LPFee,
+            protocolFee: self.protocolFee,
+            refFee: self.refFee,
+            token0Address: self.token0Address,
+            token1Address: self.token1Address,
+            totalSupplyLP: self.totalSupplyLP,
+            collectedToken0ProtocolFee: self.collectedToken0ProtocolFee,
+            collectedToken1ProtocolFee: self.collectedToken1ProtocolFee,
+            protocolFeeAddress: self.protocolFeeAddress,
+            reserve0: self.reserve0,
+            reserve1: self.reserve1,
+        }
+    }
+
+    get fun getExpectedOutputs(amount: Int, tokenWallet: Address): AmountOut {
+        throwUnless(NO_LIQUIDITY, self.totalSupplyLP > REQUIRED_MIN_LIQUIDITY);
+        let amountOut: AmountOut = AmountOut{
+            out: 0,
+            protocolFeeOut: 0,
+            refFeeOut: 0,
+        };
+        let ok: Bool = false;
+        if (tokenWallet == self.token0Address) {
+            ok = true;
+            amountOut = self.getAmountOut(false, amount, self.reserve0, self.reserve1);
+        }
+        if (tokenWallet == self.token1Address) {
+            ok = true;
+            amountOut = self.getAmountOut(false, amount, self.reserve1, self.reserve0);
+        }
+        throwUnless(INVALID_TOKEN, ok);
+        return amountOut;
+    }
+
+    get fun getLPAccountAddress(userAddress: Address): Address {
+        return contractAddress(getLPAccountStateInit(userAddress, myAddress()));
+    }
+
+    get fun getExpectedTokens(amount0: Int, amount1: Int): Int {
+        let toMint0 = (amount1 * self.totalSupplyLP) / self.reserve0;
+        let toMint1 = (amount0 * self.totalSupplyLP) / self.reserve1;
+
+        return min(toMint0, toMint1);
+    }
+
+    get fun getExpectedLiquidity(jettonAmount: Int): Amounts  {
+        return Amounts{
+            amount0: (jettonAmount * self.reserve0) / self.totalSupplyLP,
+            amount1: (jettonAmount * self.reserve1) / self.totalSupplyLP,
+        };         
+    }
 }
 
 inline fun getLPAccountStateInit(userAddress: Address, poolAddress: Address): StateInit {

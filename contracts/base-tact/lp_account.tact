@@ -23,7 +23,7 @@ contract LPAccount {
             message(MessageParameters {
                 to: self.poolAddress,
                 value: 0,
-                mode: SendRemainingBalance,
+                mode: SendRemainingValue,
                 bounce: false,
                 body: CbAddLiquidity {
                     queryId: msg.queryId,
@@ -80,4 +80,13 @@ contract LPAccount {
     }
 
     // receive(msg: ResetGas) {}
+
+    get fun getLPAccountData(): LPAccountData {
+        return LPAccountData{
+            userAddress: self.userAddress,
+            poolAddress: self.poolAddress,
+            amount0: self.amount0,
+            amount1: self.amount1,
+        }
+    }
 }
