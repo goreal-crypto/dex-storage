@@ -39,8 +39,77 @@ contract V3Pool {
     tickSpacing: Int as int24;
 
     receive(msg: Swap) {
+        throwUnless(WRONG_CALLER, sender() == self.routerAddress);
 
+        let zeroForOne = msg.zeroForOne;
+        let exactIn = msg.amountSpecified >= 0;
+        let mut amountRemaining = abs(msg.amountSpecified);
+        let mut sqrtPrice = self.sqrtPriceX96;
+        let mut tick = self.tick;
+        let mut liquidity = self.liquidity;
+        let sqrtPriceLimit = msg.sqrtPriceLimitX96;
+
+        let mut amountInTotal = 0;
+        let mut amountOutTotal = 0;
+
+        while (amountRemaining > 0 && (zeroForOne ? sqrtPrice > sqrtPriceLimit : sqrtPrice < sqrtPriceLimit)) {
+            let (nextTick, initialized) = findNextInitializedTick(tick, zeroForOne);
+            let sqrtPriceNext = sqrtRatioAtTick(nextTick);
+
+            let targetPrice = zeroForOne ? max(sqrtPriceLimit, sqrtPriceNext) : min(sqrtPriceLimit, sqrtPriceNext);
+
+            let (newSqrtPrice, amountIn, amountOut) = computeSwapStep(zeroForOne, sqrtPrice, targetPrice, liquidity, amountRemaining, exactIn);
+
+            sqrtPrice = newSqrtPrice;
+            amountRemaining -= amountIn;
+            amountInTotal += amountIn;
+            amountOutTotal += amountOut;
+
+            if (sqrtPrice == sqrtPriceNext) {
+                let tickInfo = self.ticks.get(nextTick)!!;
+                liquidity = zeroForOne ? (liquidity - tickInfo.liquidityNet) : (liquidity + tickInfo.liquidityNet);
+                tick = zeroForOne ? (nextTick - 1) : nextTick;
+            } else {
+                tick = tickAtSqrtRatio(sqrtPrice);
+            }
+        }
+
+        self.sqrtPriceX96 = sqrtPrice;
+        self.tick = tick;
+        self.liquidity = liquidity;
+
+        if (zeroForOne) {
+            send(SendParameters{
+                to: msg.userAddress,
+                value: 0,
+                mode: SendRemainingValue,
+                body: TransferToken1{
+                    amount: amountOutTotal
+                }.toCell()
+            });
+        } else {
+            send(SendParameters{
+                to: msg.userAddress,
+                value: 0,
+                mode: SendRemainingValue,
+                body: TransferToken0{
+                    amount: amountOutTotal
+                }.toCell()
+            });
+        }
     }
+    
+    fun findNextInitializedTick(tick: Int, zeroForOne: Bool): (Int, Bool) {
+        let i = tick;
+        loop {
+            i = zeroForOne ? (i - self.tickSpacing) : (i + self.tickSpacing);
+            let exists = self.ticks.contains(i);
+            if (exists || abs(i) > 887272) {
+                return (i, exists);
+            }
+        }
+    }
+
 
     receive(msg: ProvideLiquidity) {
         throwUnless(WRONG_CALLER, sender() == self.routerAddress);

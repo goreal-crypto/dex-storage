@@ -7,6 +7,7 @@ import { LPAccount } from '../wrappers/LPAccount';
 
 import { PayTo } from '../wrappers/Router';
 import { getUsedGasInternal } from '../utils/gas';
+import { LPWallet } from '../build/Router/tact_LPWallet';
 
 
 describe('Router', () => {
@@ -18,6 +19,7 @@ describe('Router', () => {
     let token0: SandboxContract<TreasuryContract>;
     let token1: SandboxContract<TreasuryContract>;
     let lpAccount: SandboxContract<LPAccount>;
+    let lpWallet: SandboxContract<LPWallet>;
     
     beforeEach(async () => {
         blockchain = await Blockchain.create();
@@ -35,6 +37,13 @@ describe('Router', () => {
                 pool.address, 
                 toNano(0), 
                 toNano(0)
+            )
+        );
+        lpWallet = blockchain.openContract(await LPWallet
+            .fromInit(
+                toNano(0), 
+                user.address, 
+                pool.address, 
             )
         );
     
@@ -251,4 +260,65 @@ describe('Router', () => {
             success: true,
         });
     });
+
+    it("should route burn message", async () =>{
+        const poolAddress = await router.getGetPoolAddress(
+            token0.address,
+            token1.address
+        );
+        const sendLP1 = await router.send(
+            token0.getSender(),
+            {
+                value: toNano(1),
+            },
+            {
+                $$type: "JettonNotification",
+                queryId: toNano(1),
+                amount: 10000n,
+                sender: user.address,
+                forwardPayload: beginCell()
+                    .storeUint(0xfffffff2, 32) // opcode
+                    .storeAddress(token0.address)
+                    .storeCoins(1)
+                    .asSlice()
+            }
+        );
+        const sendLP2 = await router.send(
+            token0.getSender(),
+            {
+                value: toNano(1),
+            },
+            {
+                $$type: "JettonNotification",
+                queryId: toNano(1),
+                amount: 20000n,
+                sender: user.address,
+                forwardPayload: beginCell()
+                    .storeUint(0xfffffff2, 32) // opcode
+                    .storeAddress(token1.address)
+                    .storeCoins(1)
+                    .asSlice()
+            }
+        );
+
+        printTransactionFees(sendLP2.transactions);
+
+        const sendBurn = await lpWallet.send(
+            user.getSender(),
+            {
+                value: toNano(1),
+            },
+            {
+                $$type: "JettonBurn",
+                queryId: toNano(1),
+                amount: 100n,
+                responseDestination: user.address,
+                customPayload: null,
+            }    
+        )
+
+        printTransactionFees(sendBurn.transactions);
+
+    });
+
 });

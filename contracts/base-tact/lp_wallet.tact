@@ -41,6 +41,7 @@ contract JettonWallet(
 
     receive(msg: JettonTransferInternal) {
         self.balance += msg.amount;
+        dump(self.balance);
 
         // This message should come only from master, or from other JettonWallet
         let wallet: StateInit = initOf JettonWallet(0, msg.sender, self.minter);
@@ -106,13 +107,13 @@ contract JettonWallet(
         // we can skip forceBasechain here because with other checks in place it's not possible 
         // to acquire jettons outside of basechain, so amount check is enough
         require(sender() == self.owner, "Incorrect sender");
-
+        dump(self.balance);
         self.balance -= msg.amount;
         require(self.balance >= 0, "Incorrect balance after send");
 
         let ctx = context();
         let fwdFee: Int = ctx.readForwardFee();
-        require(ctx.value > (fwdFee + 2 * getComputeFee(gasForBurn, false)), "Insufficient amount of TON attached");
+        // require(ctx.value > (fwdFee + 2 * getComputeFee(gasForBurn, false)), "Insufficient amount of TON attached");
 
         message(MessageParameters {
             to: self.minter,
