@@ -6,6 +6,7 @@ import { Pool } from '../wrappers/Pool';
 import { LPAccount } from '../wrappers/LPAccount';
 
 import { PayTo } from '../wrappers/Router';
+import { getUsedGasInternal } from '../utils/gas';
 
 
 describe('Router', () => {
@@ -118,7 +119,8 @@ describe('Router', () => {
 
         console.log("PayTo from pool");
         printTransactionFees(send.transactions);
-        
+        console.log("PAYTO GAS RESULT: ", getUsedGasInternal(send, {type: "chain"}))
+
 
         expect(send.transactions).toHaveTransaction({
             from: poolAddress,
@@ -176,6 +178,8 @@ describe('Router', () => {
                     .asSlice()
             }
         );
+        console.log("PROVIDE_LP GAS RESULT: ", getUsedGasInternal(sendLP2, {type: "chain"}))
+
         const send = await router.send(
             token0.getSender(),
             {
@@ -207,6 +211,8 @@ describe('Router', () => {
             from: router.address,
             to: poolAddress,
         });
+
+        console.log("SWAP GAS RESULT: ", getUsedGasInternal(send, {type: "chain"}))
 
     });
 
