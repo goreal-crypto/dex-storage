@@ -2,11 +2,7 @@ import "./lp_account";
 import "./position";
 import "./libraries/sqrt_price_math";
 import "./libraries/tick_math";
-
-struct Tick {
-    liquidityGross: Int as uint128;
-    liquidityNet: Int as int128;
-}
+import "./libraries/tick_bitmap";
 
 message ProvideLiquidity {
     userAddress: Address;
@@ -28,6 +24,13 @@ message MintLiquidity {
     tickUpper: Int as int24;
 }
 
+message Swap {
+    userAddress: Address;
+    zeroForOne: Bool;
+    amountSpecified: Int as int256;
+    sqrtPriceLimitX96: Int as uint160;
+}
+
 contract V3Pool {
     routerAddress: Address;
     token0Address: Address;
@@ -39,77 +42,23 @@ contract V3Pool {
     tickSpacing: Int as int24;
 
     receive(msg: Swap) {
-        throwUnless(WRONG_CALLER, sender() == self.routerAddress);
+        let liquidityStart = self.liquidity;
+        let amountSpecifiedRemaining = msg.amountSpecified;
+        let amountCalculated = 0;
+        let sqrtPriceX96 = self.sqrtPriceX96;
+        let tick = self.tick;
 
-        let zeroForOne = msg.zeroForOne;
-        let exactIn = msg.amountSpecified >= 0;
-        let mut amountRemaining = abs(msg.amountSpecified);
-        let mut sqrtPrice = self.sqrtPriceX96;
-        let mut tick = self.tick;
-        let mut liquidity = self.liquidity;
-        let sqrtPriceLimit = msg.sqrtPriceLimitX96;
-
-        let mut amountInTotal = 0;
-        let mut amountOutTotal = 0;
-
-        while (amountRemaining > 0 && (zeroForOne ? sqrtPrice > sqrtPriceLimit : sqrtPrice < sqrtPriceLimit)) {
-            let (nextTick, initialized) = findNextInitializedTick(tick, zeroForOne);
-            let sqrtPriceNext = sqrtRatioAtTick(nextTick);
-
-            let targetPrice = zeroForOne ? max(sqrtPriceLimit, sqrtPriceNext) : min(sqrtPriceLimit, sqrtPriceNext);
-
-            let (newSqrtPrice, amountIn, amountOut) = computeSwapStep(zeroForOne, sqrtPrice, targetPrice, liquidity, amountRemaining, exactIn);
-
-            sqrtPrice = newSqrtPrice;
-            amountRemaining -= amountIn;
-            amountInTotal += amountIn;
-            amountOutTotal += amountOut;
-
-            if (sqrtPrice == sqrtPriceNext) {
-                let tickInfo = self.ticks.get(nextTick)!!;
-                liquidity = zeroForOne ? (liquidity - tickInfo.liquidityNet) : (liquidity + tickInfo.liquidityNet);
-                tick = zeroForOne ? (nextTick - 1) : nextTick;
-            } else {
-                tick = tickAtSqrtRatio(sqrtPrice);
+        while (amountSpecifiedRemaining != 0 && sqrtPriceX96 != msg.sqrtPriceLimitX96) {
+            let sqrtPriceStartX96 = sqrtPriceX96;
+            let nextTick = nextInitializedTick(tick, self.ticks, msg.zeroForOne, self.tickSpacing);
+            if (nextTick.tick < MIN_TICK) {
+                nextTick.tick = MIN_TICK;
+            } else if (nextTick.tick > MAX_TICK) {
+                nextTick.tick = MAX_TICK;
             }
-        }
-
-        self.sqrtPriceX96 = sqrtPrice;
-        self.tick = tick;
-        self.liquidity = liquidity;
-
-        if (zeroForOne) {
-            send(SendParameters{
-                to: msg.userAddress,
-                value: 0,
-                mode: SendRemainingValue,
-                body: TransferToken1{
-                    amount: amountOutTotal
-                }.toCell()
-            });
-        } else {
-            send(SendParameters{
-                to: msg.userAddress,
-                value: 0,
-                mode: SendRemainingValue,
-                body: TransferToken0{
-                    amount: amountOutTotal
-                }.toCell()
-            });
+            let sqrtPriceNextX96 = sqrtRatioAtTick(nextTick.tick);
         }
     }
-    
-    fun findNextInitializedTick(tick: Int, zeroForOne: Bool): (Int, Bool) {
-        let i = tick;
-        loop {
-            i = zeroForOne ? (i - self.tickSpacing) : (i + self.tickSpacing);
-            let exists = self.ticks.contains(i);
-            if (exists || abs(i) > 887272) {
-                return (i, exists);
-            }
-        }
-    }
-
 
     receive(msg: ProvideLiquidity) {
         throwUnless(WRONG_CALLER, sender() == self.routerAddress);
@@ -203,11 +152,7 @@ contract V3Pool {
         tickInfo.liquidityNet = upper 
                                 ? tickInfo.liquidityNet - liquidityDelta
                                 : tickInfo.liquidityNet + liquidityDelta;
-        if (tickInfoMaybe == null) {
-            self.ticks.set(tick, tickInfo);
-        } else {
-            self.ticks.replace(tick, tickInfo);
-        }
+        self.ticks.set(tick, tickInfo);
         return flipped;
     }
 

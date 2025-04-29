@@ -1,30 +1,33 @@
+import "./sqrt_price_math";
+
+struct SwapStep {
+    sqrtRatioNextX96: Int as uint160;
+    amountIn: Int as uint256;
+    amountOut: Int as uint256;
+    // feeAmount: Int as uint256;  
+}
+
 fun computeSwapStep(
-    zeroForOne: Bool,
-    sqrtPriceCurrent: Int,
-    sqrtPriceTarget: Int,
+    sqrtRatioCurrentX96: Int,
+    sqrtRatioTargetX96: Int,
     liquidity: Int,
     amountRemaining: Int,
-    exactIn: Bool
-): (Int, Int, Int) {
-    if (zeroForOne) {
-        let amountIn = amount0Delta(sqrtPriceTarget, sqrtPriceCurrent, liquidity);
-        if (amountIn > amountRemaining) {
-            let newPrice = getNewSqrtPriceFromInput(sqrtPriceCurrent, liquidity, amountRemaining, true);
-            let amountOut = amount1Delta(newPrice, sqrtPriceCurrent, liquidity);
-            return (newPrice, amountRemaining, amountOut);
+    // feePips: Int
+): SwapStep {
+    let zeroForOne = sqrtRatioCurrentX96 >= sqrtRatioTargetX96;
+    let exactIn = amountRemaining >= 0;
+    let amountIn = 0;
+    let sqrtRatioNextX96 = 0;
+    if (exactIn) {
+        let amountRemainingLessFee = amountRemaining;
+        amountIn = zeroForOne 
+            ? amount0Delta_(sqrtRatioTargetX96, sqrtRatioCurrentX96, liquidity, true)
+            : amount1Delta_(sqrtRatioTargetX96, sqrtRatioCurrentX96, liquidity, true);
+        if (amountRemainingLessFee >= amountIn) {
+            sqrtRatioNextX96 = sqrtRatioTargetX96;
         } else {
-            let amountOut = amount1Delta(sqrtPriceTarget, sqrtPriceCurrent, liquidity);
-            return (sqrtPriceTarget, amountIn, amountOut);
+            // TODO
         }
-    } else {
-        let amountIn = amount1Delta(sqrtPriceCurrent, sqrtPriceTarget, liquidity);
-        if (amountIn > amountRemaining) {
-            let newPrice = getNewSqrtPriceFromInput(sqrtPriceCurrent, liquidity, amountRemaining, false);
-            let amountOut = amount0Delta(sqrtPriceCurrent, newPrice, liquidity);
-            return (newPrice, amountRemaining, amountOut);
-        } else {
-            let amountOut = amount0Delta(sqrtPriceCurrent, sqrtPriceTarget, liquidity);
-            return (sqrtPriceTarget, amountIn, amountOut);
-        }
+
     }
 }
