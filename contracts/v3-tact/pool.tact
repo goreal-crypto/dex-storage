@@ -57,6 +57,7 @@ contract V3Pool {
                 nextTick.tick = MAX_TICK;
             }
             let sqrtPriceNextX96 = sqrtRatioAtTick(nextTick.tick);
+            
         }
     }
 

@@ -5,10 +5,10 @@ import { TickMathTest } from '../build/TickMathTest/tact_TickMathTest';
 import { SqrtPriceMathTest } from '../build/SqrtPriceMathTest/tact_SqrtPriceMathTest';
 import {Decimal} from "decimal.js";
 import { Test } from '../build/Test/tact_Test';
-import bn from 'bignumber.js';
 import JSBI from 'jsbi';
 import invariant from 'tiny-invariant';
 import { TickBitmapTest } from '../build/TickBitmapTest/tact_TickBitmapTest';
+import { SwapMathTest } from '../build/SwapMathTest/tact_SwapMathTest';
 
 export const MAX_SAFE_INTEGER = JSBI.BigInt(Number.MAX_SAFE_INTEGER);
 
@@ -309,14 +309,14 @@ describe('sqrtPriceMath', () => {
             let priceA = encodeSqrtRatioX96(1,1);
             let priceB = encodeSqrtRatioX96(1,1)
             // console.log(priceA, priceB);
-            let amount0 = await sqrtPriceMath.getGetAmount0Delta(BigInt(priceA.toString()), BigInt(priceB.toString()), 0n,)
+            let amount0 = await sqrtPriceMath.getgetAmount0Delta_(BigInt(priceA.toString()), BigInt(priceB.toString()), 0n, true)
             expect(amount0).toBe(0n);
         });
         it("1,1 == 2,1 == 0", async () => {
             let priceA = encodeSqrtRatioX96(1,1);
             let priceB = encodeSqrtRatioX96(2,1)
             // console.log(priceA, priceB);
-            let amount0 = await sqrtPriceMath.getGetAmount0Delta(BigInt(priceA.toString()), BigInt(priceB.toString()), 0n,)
+            let amount0 = await sqrtPriceMath.getgetAmount0Delta_(BigInt(priceA.toString()), BigInt(priceB.toString()), 0n, true)
             expect(amount0).toBe(0n);
         });
         it("1,1 == 121,100 == 90909090909090910n", async () => {
@@ -324,27 +324,28 @@ describe('sqrtPriceMath', () => {
             let priceB = encodeSqrtRatioX96(121,100)
             let liquidity = 10n ** 18n
             // console.log(priceA, priceB);
-            let amount0 = await sqrtPriceMath.getGetAmount0Delta(BigInt(priceA.toString()), BigInt(priceB.toString()), liquidity,)
+            let amount0 = await sqrtPriceMath.getgetAmount0Delta_(BigInt(priceA.toString()), BigInt(priceB.toString()), liquidity, true)
             expect(amount0).toBe(90909090909090910n);
         });
         it("1,1 == 121,100 == -90909090909090909n", async () => {
             let priceA = encodeSqrtRatioX96(1,1);
             let priceB = encodeSqrtRatioX96(121,100)
-            let liquidity = -(10n ** 18n)
+            let liquidity = (10n ** 18n)
             // console.log(priceA, priceB);
-            let amount0 = await sqrtPriceMath.getGetAmount0Delta(BigInt(priceA.toString()), BigInt(priceB.toString()), liquidity,)
-            expect(amount0).toBe(-90909090909090909n);
+            let amount0 = await sqrtPriceMath.getgetAmount0Delta_(BigInt(priceA.toString()), BigInt(priceB.toString()), liquidity, false)
+            expect(amount0).toBe(90909090909090909n);
         });
+        
 
         it("2^90,1 == 2^96,1 == ?-1?", async () => {
             let priceA = encodeSqrtRatioX96(2 ** 90, 1);
             let priceB = encodeSqrtRatioX96(2 ** 96, 1)
             let liquidity = (10n ** 18n)
             // console.log(priceA, priceB);
-            let amount0Up = await sqrtPriceMath.getGetAmount0Delta(BigInt(priceA.toString()), BigInt(priceB.toString()), liquidity,)
-            let amount0Down = 1n-await sqrtPriceMath.getGetAmount0Delta(BigInt(priceA.toString()), BigInt(priceB.toString()), -liquidity,)
+            let amount0Up = await sqrtPriceMath.getgetAmount0Delta_(BigInt(priceA.toString()), BigInt(priceB.toString()), liquidity, true)
+            let amount0Down = await sqrtPriceMath.getgetAmount0Delta_(BigInt(priceA.toString()), BigInt(priceB.toString()), liquidity, false)
 
-            expect(amount0Down).toBe(amount0Up);
+            expect(amount0Up).toBe(amount0Down + 1n);
         });
     });
     describe("amount1", () => {
@@ -378,5 +379,289 @@ describe('sqrtPriceMath', () => {
             let amount0 = await sqrtPriceMath.getGetAmount1Delta(BigInt(priceA.toString()), BigInt(priceB.toString()), liquidity,)
             expect(amount0).toBe(-99999999999999999n);
         });
+    });
+
+    describe("nextSqrtPriceFromInput", () => {
+        it("1", async () => {
+            const price = 1n
+            const liquidity = 1n
+            const amountIn = 2n ** 255n
+            expect(await sqrtPriceMath.getGetNextSqrtPriceFromInput(price, liquidity, amountIn, true))
+            .toBe(1n);
+        });
+        it("2", async () => {
+            const price = BigInt(encodeSqrtRatioX96(1, 1).toString())
+            const liquidity = 10n ** 17n
+            const amountIn = 0n
+            expect(await sqrtPriceMath.getGetNextSqrtPriceFromInput(price, liquidity, amountIn, true))
+            .toBe(price);
+        });
+        it("3", async () => {
+            const price = BigInt(encodeSqrtRatioX96(1, 1).toString())
+            const liquidity = 10n ** 17n
+            const amountIn = 0n
+            expect(await sqrtPriceMath.getGetNextSqrtPriceFromInput(price, liquidity, amountIn, false))
+            .toBe(price);
+        });
+        it("4", async () => {
+            const price = 1n
+            const liquidity = 1n
+            const amountIn = 2n ** 255n
+            expect(await sqrtPriceMath.getGetNextSqrtPriceFromInput(price, liquidity, amountIn, true))
+            .toBe(1n);
+        });
+        it("5", async () => {
+            const price = BigInt(encodeSqrtRatioX96(1, 1).toString())
+            const liquidity = 10n ** 17n
+            const amountIn = 0n
+            expect(await sqrtPriceMath.getGetNextSqrtPriceFromInput(price, liquidity, amountIn, true))
+            .toBe(price);
+        });
+        it("6", async () => {
+            const price = BigInt(encodeSqrtRatioX96(1, 1).toString())
+            const liquidity = 10n ** 17n
+            const amountIn = 0n
+            expect(await sqrtPriceMath.getGetNextSqrtPriceFromInput(price, liquidity, amountIn, false))
+            .toBe(price);
+        });
+        // it("7", async () => {
+        //     const price = 2n ** 160n - 1n
+        //     const liquidity = 2n ** 128n - 1n
+        //     const amountIn = 2n ** 256n - 1n - (liquidity << 96n / price)
+        //     expect(await sqrtPriceMath.getGetNextSqrtPriceFromInput(price, liquidity, amountIn, true))
+        //     .toBe(1n);
+        // });
+        it("8", async () => {
+            const price = BigInt(encodeSqrtRatioX96(1, 1).toString())
+            const liquidity = 10n ** 18n
+            const amountIn = 10n ** 17n
+            expect(await sqrtPriceMath.getGetNextSqrtPriceFromInput(price, liquidity, amountIn, false))
+            .toBe(87150978765690771352898345369n);
+        });
+        it("9", async () => {
+            const price = BigInt(encodeSqrtRatioX96(1, 1).toString())
+            const liquidity = 10n ** 18n
+            const amountIn = 10n ** 17n
+            expect(await sqrtPriceMath.getGetNextSqrtPriceFromInput(price, liquidity, amountIn, true))
+            .toBe(72025602285694852357767227579n);
+        });
+        it("10", async () => {
+            const price = BigInt(encodeSqrtRatioX96(1, 1).toString())
+            const liquidity = 10n ** 19n
+            const amountIn = 2n ** 100n
+            expect(await sqrtPriceMath.getGetNextSqrtPriceFromInput(price, liquidity, amountIn, true))
+            .toBe(624999999995069620n);
+        });
+        it("11", async () => {
+            const price = BigInt(encodeSqrtRatioX96(1, 1).toString())
+            const liquidity = 1n
+            const amountIn = (2n ** 128n - 1n)
+            console.log("11");
+            expect(await sqrtPriceMath.getGetNextSqrtPriceFromInput(price, liquidity, amountIn, true))
+            .toBe(1n);
+        });
+    });
+    describe("nextSqrtPriceFromOutput", () => {
+        it("1", async () => {
+            const price = 20282409603651670423947251286016n
+            const liquidity = 1024n
+            const amountOut = 262143n
+            expect(await sqrtPriceMath.getGetNextSqrtPriceFromOutput(price, liquidity, amountOut, true))
+            .toBe(77371252455336267181195264n);
+        });
+        it("2", async () => {
+            const price = BigInt(encodeSqrtRatioX96(1, 1).toString())
+            const liquidity = 10n ** 17n
+            const amountOut = 0n
+            expect(await sqrtPriceMath.getGetNextSqrtPriceFromOutput(price, liquidity, amountOut, false))
+            .toBe(price);
+        });
+        it("3", async () => {
+            const price = BigInt(encodeSqrtRatioX96(1, 1).toString())
+            const liquidity = 10n ** 17n
+            const amountOut = 0n
+            expect(await sqrtPriceMath.getGetNextSqrtPriceFromOutput(price, liquidity, amountOut, true))
+            .toBe(price);
+        });
+        it("4", async () => {
+            const price = BigInt(encodeSqrtRatioX96(1, 1).toString())
+            const liquidity = 10n ** 18n
+            const amountOut = 10n ** 17n
+            expect(await sqrtPriceMath.getGetNextSqrtPriceFromOutput(price, liquidity, amountOut, false))
+            .toBe(88031291682515930659493278152n);
+        });
+        it("5", async () => {
+            const price = BigInt(encodeSqrtRatioX96(1, 1).toString())
+            const liquidity = 10n ** 18n
+            const amountOut = 10n ** 17n
+            expect(await sqrtPriceMath.getGetNextSqrtPriceFromOutput(price, liquidity, amountOut, true))
+            .toBe(71305346262837903834189555302n);
+        });
+    });
+});
+
+describe('swapMath', () => {
+    let blockchain: Blockchain;
+    let user: SandboxContract<TreasuryContract>;
+    let swapMath: SandboxContract<SwapMathTest>;
+
+    beforeEach(async () => {
+        blockchain = await Blockchain.create();
+        user = await blockchain.treasury("user");
+        swapMath = blockchain.openContract(await SwapMathTest.fromInit()) 
+        await swapMath.send(
+            user.getSender(),
+            {value: toNano(1)},
+            null
+        )
+    });
+
+    it("1", async () => {
+        const price = BigInt(encodeSqrtRatioX96(1, 1).toString())
+        const priceTarget = BigInt(encodeSqrtRatioX96(101, 100).toString())
+        const liquidity = 2n * (10n ** 18n)
+        const amount = (10n ** 18n)
+        const zeroForOne = false
+        const fee = 600n
+        const swapStep = await swapMath.getGetComputeSwapStep(price, priceTarget, liquidity, amount, fee);
+        expect(swapStep.amountIn).toBe(9975124224178055n);
+        expect(swapStep.amountOut).toBe(9925619580021728n);
+        expect(swapStep.feeAmount).toBe(5988667735148n);
+        expect(swapStep.amountIn + swapStep.feeAmount).toBeLessThan(amount);
+        expect(swapStep.sqrtRatioNextX96).toBe(priceTarget);
+    });
+    it("2", async () => {
+        const price = BigInt(encodeSqrtRatioX96(1, 1).toString())
+        const priceTarget = BigInt(encodeSqrtRatioX96(101, 100).toString())
+        const liquidity = 2n * (10n ** 18n)
+        const amount = -(10n ** 18n)
+        const zeroForOne = false
+        const fee = 600n
+        const swapStep = await swapMath.getGetComputeSwapStep(price, priceTarget, liquidity, amount, fee);
+        expect(swapStep.amountIn).toBe(9975124224178055n);
+        expect(swapStep.amountOut).toBe(9925619580021728n);
+        expect(swapStep.feeAmount).toBe(5988667735148n);
+        expect(swapStep.amountOut).toBeLessThan(-amount);
+        expect(swapStep.sqrtRatioNextX96).toBe(priceTarget);
+    });
+    // it("3", async () => {
+    //     console.log(3)
+    //     const price = BigInt(encodeSqrtRatioX96(1, 1).toString())
+    //     console.log(price);
+    //     const priceTarget = BigInt(encodeSqrtRatioX96(1000, 100).toString())
+    //     console.log(priceTarget)
+    //     console.log(price > priceTarget)
+    //     const liquidity = 2n * (10n ** 18n)
+    //     const amount = (10n ** 18n)
+    //     const zeroForOne = false
+    //     const fee = 600n
+    //     const swapStep = await swapMath.getGetComputeSwapStep(price, priceTarget, liquidity, amount, fee);
+    //     // expect(swapStep.amountOut).toBe(999400000000000000n);
+    //     // expect(swapStep.amountIn).toBe(666399946655997866n);
+    //     expect(swapStep.feeAmount).toBe(600000000000000n);
+    //     expect(swapStep.amountOut + swapStep.feeAmount).toBe(amount);
+    //     expect(swapStep.sqrtRatioNextX96).toBeLessThan(priceTarget);
+    // });
+    it("4", async () => {
+        console.log(4)
+        const price = BigInt(encodeSqrtRatioX96(1, 1).toString())
+        console.log(price);
+        const priceTarget = BigInt(encodeSqrtRatioX96(10000, 100).toString())
+        console.log(priceTarget)
+        console.log(price > priceTarget)
+        const liquidity = 2n * (10n ** 18n)
+        const amount = -(10n ** 18n)
+        const zeroForOne = false
+        const fee = 600n
+        const swapStep = await swapMath.getGetComputeSwapStep(price, priceTarget, liquidity, amount, fee);
+        expect(swapStep.amountIn).toBe(2000000000000000000n);
+        expect(swapStep.amountOut).toBe(-amount);
+        expect(swapStep.feeAmount).toBe(1200720432259356n);
+        expect(swapStep.sqrtRatioNextX96).toBeLessThan(priceTarget);
+    });
+    it("5", async () => {
+        console.log(5)
+        const price = 417332158212080721273783715441582n
+        console.log(price);
+        const priceTarget = 1452870262520218020823638996n
+        console.log(priceTarget)
+        console.log(price > priceTarget)
+        const liquidity = 159344665391607089467575320103n
+        const amount = -1n
+        const zeroForOne = false
+        const fee = 1n
+        const swapStep = await swapMath.getGetComputeSwapStep(price, priceTarget, liquidity, amount, fee);
+        expect(swapStep.amountIn).toBe(1n);
+        expect(swapStep.amountOut).toBe(1n);
+        expect(swapStep.feeAmount).toBe(1n);
+        expect(swapStep.sqrtRatioNextX96).toBe(417332158212080721273783715441581n);
+    });
+    it("6", async () => {
+        console.log(6)
+        const price = 2n
+        console.log(price);
+        const priceTarget = 1n
+        console.log(priceTarget)
+        console.log(price > priceTarget)
+        const liquidity = 1n
+        const amount = 3915081100057732413702495386755767n
+        const zeroForOne = false
+        const fee = 1n
+        const swapStep = await swapMath.getGetComputeSwapStep(price, priceTarget, liquidity, amount, fee);
+        expect(swapStep.amountIn).toBe(39614081257132168796771975168n);
+        expect(swapStep.amountOut).toBe(0n);
+        expect(swapStep.feeAmount).toBe(39614120871253040049813n);
+        expect(swapStep.sqrtRatioNextX96).toBe(1n);
+    });
+    // it("7", async () => {
+    //     console.log(7)
+    //     const price = 2413n
+    //     console.log(price);
+    //     const priceTarget = 79887613182836312n
+    //     console.log(priceTarget)
+    //     console.log(price > priceTarget)
+    //     const liquidity = 1985041575832132834610021537970n
+    //     const amount = 10n
+    //     const zeroForOne = false
+    //     const fee = 1872n
+    //     const swapStep = await swapMath.getGetComputeSwapStep(price, priceTarget, liquidity, amount, fee);
+    //     // expect(swapStep.amountIn).toBe(0n);
+    //     // expect(swapStep.amountOut).toBe(0n);
+    //     expect(swapStep.feeAmount).toBe(10n);
+    //     expect(swapStep.sqrtRatioNextX96).toBe(2413n);
+    // });
+    it("8", async () => {
+        console.log(8)
+        const price = 20282409603651670423947251286016n
+        console.log(price);
+        const priceTarget = price * 11n / 10n
+        console.log(priceTarget)
+        console.log(price > priceTarget)
+        const liquidity = 1024n
+        const amount = -4n
+        const zeroForOne = false
+        const fee = 3000n
+        const swapStep = await swapMath.getGetComputeSwapStep(price, priceTarget, liquidity, amount, fee);
+        expect(swapStep.amountIn).toBe(26215n);
+        expect(swapStep.amountOut).toBe(0n);
+        expect(swapStep.feeAmount).toBe(79n);
+        expect(swapStep.sqrtRatioNextX96).toBe(priceTarget);
+    });
+    it("9", async () => {
+        console.log(9)
+        const price = 20282409603651670423947251286016n
+        console.log(price);
+        const priceTarget = price * 9n / 10n
+        console.log(priceTarget)
+        console.log(price > priceTarget)
+        const liquidity = 1024n
+        const amount = -263000n
+        const zeroForOne = false
+        const fee = 3000n
+        const swapStep = await swapMath.getGetComputeSwapStep(price, priceTarget, liquidity, amount, fee);
+        expect(swapStep.amountIn).toBe(1n);
+        expect(swapStep.amountOut).toBe(26214n);
+        expect(swapStep.feeAmount).toBe(1n);
+        expect(swapStep.sqrtRatioNextX96).toBe(priceTarget);
     });
 });
