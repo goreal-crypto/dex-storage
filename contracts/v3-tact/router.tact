@@ -1,3 +1,5 @@
+import "./pool";
+
 contract Router {
     receive(msg: JettonNotification) {
         throwUnless(INVALID_AMOUNT, msg.amount > 0);
@@ -24,8 +26,7 @@ contract Router {
             });
         } else {
             if (opcode == SWAP) {
-                let toAddress: Address = payload.loadAddress();
-
+                let sqrtPriceLimitX96 = payload.loadUint(160);
                 let poolAddress: Address = getPoolAddress(ctx.sender, token1Address);
                 message(MessageParameters{
                     to: poolAddress,
@@ -33,25 +34,34 @@ contract Router {
                     mode: SendRemainingValue,
                     bounce: false,
                     body: Swap {
-                        queryId: msg.queryId,
-                        fromAddress: toAddress,
-                        tokenWallet: ctx.sender,
-                        jettonAmount: msg.amount,
+                        userAddress: msg.sender,
+                        zeroForOne: ctx.sender.asSlice().hash() > token1Address.asSlice().hash(),
+                        amountSpecified: msg.amount,
+                        sqrtPriceLimitX96: sqrtPriceLimitX96
                     }.toCell()
                 });
             } else if (opcode == PROVIDE_LP) {
                 let poolInit: StateInit = getPoolStateInit(ctx.sender, token1Address);
+                let enough0 = payload.loadCoins();
+                let enough1 = payload.loadCoins();
+                let liquidity = payload.loadUint(128);
+                let lowerTick = payload.loadInt(24);
+                let upperTick = payload.loadInt(24);
                 if (ctx.sender.asSlice().hash() > token1Address.asSlice().hash()) {
                     deploy(DeployParameters{
                         init: poolInit,
                         value: 0,
                         mode: SendRemainingValue,
                         bounce: false,
-                        body: ProvideLP {
-                            queryId: msg.queryId,
-                            fromUser: msg.sender,
+                        body: ProvideLiquidity {
+                            userAddress: msg.sender,
                             amount0: msg.amount, 
                             amount1: 0,
+                            enough0: enough0,
+                            enough1: enough1,
+                            liquidity: liquidity,
+                            lowerTick: lowerTick,
+                            upperTick: upperTick,
                         }.toCell()
                     }); 
                 } else {
@@ -60,13 +70,15 @@ contract Router {
                         value: 0,
                         mode: SendRemainingValue,
                         bounce: false,
-                        body: ProvideLP {
-                            queryId: msg.queryId,
-                            fromUser: msg.sender,
+                        body: ProvideLiquidity {
+                            userAddress: msg.sender,
+                            amount0: 0, 
+                            amount1: msg.amount,
+                            enough0: enough0,
+                            enough1: enough1,
+                            liquidity: liquidity,
                             lowerTick: lowerTick,
                             upperTick: upperTick,
-                            amount0: 0,
-                            amount1: msg.amount,
                         }.toCell()
                     }); 
                 }  

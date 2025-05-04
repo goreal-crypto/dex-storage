@@ -21,20 +21,20 @@ fun computeSwapStep(
     let sqrtRatioNextX96 = 0;
     let feeAmount = 0;
     if (exactIn) {
+
         let amountRemainingLessFee = muldiv(amountRemaining, 1000000 - feePips, 1000000);
-        dump("hello");
-        dump(zeroForOne);
+        // dump(amountRemainingLessFee);
+        // dump(amountRemaining);
         amountIn = zeroForOne 
             ? amount0Delta_(sqrtRatioTargetX96, sqrtRatioCurrentX96, liquidity, true)
             : amount1Delta_(sqrtRatioCurrentX96, sqrtRatioTargetX96, liquidity, true);
-        dump(amountIn);
-        dump("hello2");
+        // dump("ddd");
 
 
         if (amountRemainingLessFee >= amountIn) {
             sqrtRatioNextX96 = sqrtRatioTargetX96;
         } else {
-            sqrtRatioNextX96 = nextSqrtPriceFromOutput(
+            sqrtRatioNextX96 = nextSqrtPriceFromInput(
                 sqrtRatioCurrentX96,
                 liquidity,
                 amountRemainingLessFee,
@@ -56,7 +56,6 @@ fun computeSwapStep(
             );
         }
     }
-
     let max = sqrtRatioTargetX96 == sqrtRatioNextX96;
 
     if (zeroForOne) {
@@ -74,19 +73,16 @@ fun computeSwapStep(
             ? amountOut
             : amount0Delta_(sqrtRatioCurrentX96, sqrtRatioNextX96, liquidity, false);
     }
-    dump(zeroForOne);
-    dump(max);
-    dump(exactIn);
-    dump(amountIn);
-    dump(amount0Delta_(sqrtRatioNextX96, sqrtRatioCurrentX96, liquidity, true));
-    dump(amount1Delta_(sqrtRatioCurrentX96, sqrtRatioNextX96, liquidity, true));
 
     if (!exactIn && (amountOut > -amountRemaining)) {
         amountOut = -amountRemaining;
     }
     if (exactIn && (sqrtRatioNextX96 != sqrtRatioTargetX96)) {
+        // dump(amountRemaining);
+        // dump(amountIn);
         feeAmount = amountRemaining - amountIn;
     } else {
+        // dump("222");
         feeAmount = muldivc(amountIn, feePips, 1000000 - feePips);
     }
     return SwapStep{

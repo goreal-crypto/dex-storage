@@ -1,4 +1,4 @@
-message AddLiquidity {
+message(7) AddLiquidity {
     newAmount0: Int as coins;
     newAmount1: Int as coins;
     newEnough0: Int as coins;
@@ -7,15 +7,16 @@ message AddLiquidity {
     tickLower: Int as int24;
     tickUpper: Int as int24;
 }
+const INVALID_CALLER: Int = 1000;
 
-
-contract V3LPAccount {
-    userAddress: Address;
-    poolAddress: Address;
-    amount0: Int as coins;
-    amount1: Int as coins;
+contract LPAccount (
+    userAddress: Address,
+    poolAddress: Address,
+    amount0: Int as coins,
+    amount1: Int as coins,
     // enough0: Int as coins;
     // enough1: Int as coins;
+) {
 
     receive(msg: AddLiquidity) {
         throwUnless(INVALID_CALLER, sender() == self.poolAddress);
