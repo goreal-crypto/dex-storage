@@ -41,6 +41,7 @@ describe("V3Pool", () => {
             {value: toNano("1")},
             {
                 $$type: "Initialize",
+                queryId: 0n,
                 sqrtPriceX96: BigInt(encodeSqrtRatioX96(1,1).toString())
             }
         )   
@@ -54,6 +55,7 @@ describe("V3Pool", () => {
                 {value: toNano("1")},
                 {
                     $$type: "Initialize",
+                    queryId: 0n,
                     sqrtPriceX96: BigInt(encodeSqrtRatioX96(1,1).toString())
                 }
             )   
@@ -68,6 +70,7 @@ describe("V3Pool", () => {
                 {value: toNano("1")},
                 {
                     $$type: "ProvideLiquidity",
+                    queryId: 0n,
                     userAddress: user.address,
                     amount0: 0n,
                     amount1: amounts.amount1,
@@ -83,6 +86,7 @@ describe("V3Pool", () => {
                 {value: toNano("1")},
                 {
                     $$type: "ProvideLiquidity",
+                    queryId: 0n,
                     userAddress: user.address,
                     amount0: amounts.amount0,
                     amount1: 0n,
@@ -109,6 +113,7 @@ describe("V3Pool", () => {
                 {value: toNano("1")},
                 {
                     $$type: "ProvideLiquidity",
+                    queryId: 0n,
                     userAddress: user.address,
                     amount0: 0n,
                     amount1: amounts1.amount1,
@@ -124,6 +129,7 @@ describe("V3Pool", () => {
                 {value: toNano("1")},
                 {
                     $$type: "ProvideLiquidity",
+                    queryId: 0n,
                     userAddress: user.address,
                     amount0: amounts1.amount0,
                     amount1: 0n,
@@ -145,6 +151,7 @@ describe("V3Pool", () => {
                 {value: toNano("1")},
                 {
                     $$type: "ProvideLiquidity",
+                    queryId: 0n,
                     userAddress: user.address,
                     amount0: 0n,
                     amount1: amounts2.amount1,
@@ -160,6 +167,7 @@ describe("V3Pool", () => {
                 {value: toNano("1")},
                 {
                     $$type: "ProvideLiquidity",
+                    queryId: 0n,
                     userAddress: user.address,
                     amount0: amounts2.amount0,
                     amount1: 0n,
@@ -181,7 +189,9 @@ describe("V3Pool", () => {
             const swap = await pool.send(
                 router.getSender(),
                 {value: toNano("10")},
-                {$$type: "Swap",
+                {
+                    $$type: "Swap",
+                    queryId: 0n,
                     userAddress: user.address,
                     zeroForOne: true,
                     amountSpecified: 500000000000000000n,
@@ -210,6 +220,7 @@ describe("V3Pool", () => {
                 {value: toNano("1")},
                 {
                     $$type: "Initialize",
+                    queryId: 0n,
                     sqrtPriceX96: BigInt(encodeSqrtRatioX96(1,1).toString())
                 }
             )  
@@ -222,6 +233,7 @@ describe("V3Pool", () => {
                 {value: toNano("1")},
                 {
                     $$type: "ProvideLiquidity",
+                    queryId: 0n,
                     userAddress: user.address,
                     amount0: 0n,
                     amount1: amounts1.amount1,
@@ -237,6 +249,7 @@ describe("V3Pool", () => {
                 {value: toNano("1")},
                 {
                     $$type: "ProvideLiquidity",
+                    queryId: 0n,
                     userAddress: user.address,
                     amount0: amounts1.amount0,
                     amount1: 0n,
@@ -247,7 +260,6 @@ describe("V3Pool", () => {
                     tickUpper: 8000n
                 }
             );
-            console.log(await pool.getGetPoolState());
 
 
             const liquidity2 = 2n * (10n ** 18n)
@@ -258,6 +270,7 @@ describe("V3Pool", () => {
                 {value: toNano("1")},
                 {
                     $$type: "ProvideLiquidity",
+                    queryId: 0n,
                     userAddress: user.address,
                     amount0: 0n,
                     amount1: amounts2.amount1,
@@ -273,6 +286,7 @@ describe("V3Pool", () => {
                 {value: toNano("1")},
                 {
                     $$type: "ProvideLiquidity",
+                    queryId: 0n,
                     userAddress: user.address,
                     amount0: amounts2.amount0,
                     amount1: 0n,
@@ -294,15 +308,14 @@ describe("V3Pool", () => {
         });
         
         let res: number[] = []
-        for (let i = 0; i < 5000; i+=256) {
+        for (let i = 0; i < 3000; i+=256) {
             it(i.toString(), async () => {
                 let sqrtPriceLimitX96 = await tickMathTest.getGetSqrtRatioAtTick(BigInt(i));
-            
-                
                 const swap = await pool.send(
                     router.getSender(),
                     {value: toNano("10")},
                     {$$type: "Swap",
+                        queryId: 0n,
                         userAddress: user.address,
                         zeroForOne: false,
                         amountSpecified: 500000000000000000n,
@@ -310,10 +323,7 @@ describe("V3Pool", () => {
                     }
                 );
                 res.push(getUsedGasInternal(swap, {type: "chain"}))
-                printTransactionFees(swap.transactions);
-                console.log(await pool.getGetPoolState())
                 console.log(res);
-
             });
         }
     })

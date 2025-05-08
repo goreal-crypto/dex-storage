@@ -4,7 +4,7 @@ import { Dictionary, toNano } from "@ton/core";
 import { encodeSqrtRatioX96 } from "../utils/math";
 import { getUsedGasInternal } from "../utils/gas";
 
-const main = async () => {
+export async function run() {
     const liquidityConfigs = [
         {tickLower: 0n, tickUpper: 100n},
         {tickLower: 100n, tickUpper: 200n},
@@ -100,5 +100,3 @@ const main = async () => {
         console.log(getUsedGasInternal(swap, {type: "chain"}))
     }
 }
-
-void main()

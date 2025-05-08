@@ -1,6 +1,57 @@
 import "./pool";
+import "../base-tact/gas";
 
 contract Router {
+    receive(msg: PayTo) {
+        let gasRequired = getGasFee(20000, WORKCHAIN); 
+        let msgValue = context().value;
+        throwUnless(INSUFFICIENT_GAS, msgValue > gasRequired);
+
+        let poolAddress = getPoolAddress(msg.token0Address, msg.token1Address);
+        throwUnless(INVALID_CALLER, poolAddress == sender());
+
+        let gas = 0;
+        let mode = SendRemainingValue;
+        if ((msg.amount0Out > 0) && (msg.amount1Out > 0)) {
+            gas = (msgValue - gasRequired) / 2;
+            mode = SendDefaultMode;
+        }
+        if (msg.amount0Out > 0) {
+            message(MessageParameters{
+                to: msg.token0Address,
+                value: gas,
+                mode: mode,
+                bounce: false,
+                body: JettonTransfer {
+                    queryId: msg.queryId,
+                    amount: msg.amount0Out,
+                    destination: msg.toAddress,
+                    responseDestination: msg.toAddress,
+                    customPayload: null,
+                    forwardTonAmount: 0,
+                    forwardPayload: emptySlice(),
+                }.toCell()
+            });
+        }
+        if (msg.amount1Out > 0) {
+            message(MessageParameters{
+                to: msg.token1Address,
+                value: gas,
+                mode: mode,
+                bounce: false, 
+                body: JettonTransfer {
+                    queryId: msg.queryId,
+                    amount: msg.amount1Out,
+                    destination: msg.toAddress,
+                    responseDestination: msg.toAddress,
+                    customPayload: null,
+                    forwardTonAmount: 0,
+                    forwardPayload: emptySlice(),
+                }.toCell()
+            });
+        }
+    }
+
     receive(msg: JettonNotification) {
         throwUnless(INVALID_AMOUNT, msg.amount > 0);
         let payload: Slice = msg.forwardPayload;
@@ -19,9 +70,9 @@ contract Router {
                     amount: msg.amount,
                     destination: ctx.sender,
                     responseDestination: ctx.sender,
-                    customPayload: null, // .store_uint(0, 1);
+                    customPayload: null, 
                     forwardTonAmount: 0,
-                    forwardPayload: emptySlice(), // .store_uint(0, 1);
+                    forwardPayload: emptySlice(),
                 }.toCell()
             });
         } else {

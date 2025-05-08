@@ -13,9 +13,7 @@ describe('Router', () => {
     let router: SandboxContract<TreasuryContract>;
     let pool: SandboxContract<Pool>;
     let token0: SandboxContract<TreasuryContract>;
-    let token1: SandboxContract<TreasuryContract>;
-    let lpAccount: SandboxContract<LPAccount>;
-    
+    let token1: SandboxContract<TreasuryContract>;    
 
     beforeEach(async () => {
         blockchain = await Blockchain.create();
@@ -39,22 +37,7 @@ describe('Router', () => {
                 0n
             )
         );
-        lpAccount = blockchain.openContract(await LPAccount
-            .fromInit(
-                user.address, 
-                pool.address, 
-                toNano(0), 
-                toNano(0)
-            )
-        );
         await pool.send(
-            user.getSender(),
-            {
-                value: toNano('1'),
-            }, 
-            null
-        )
-        await lpAccount.send(
             user.getSender(),
             {
                 value: toNano('1'),
@@ -64,6 +47,7 @@ describe('Router', () => {
     });
 
     it("should accept ProvideLP message", async () => {
+        const LPAccountAddress = await pool.getGetLpAccountAddress(user.address);
         const send = await pool.send(
             router.getSender(),
             {
@@ -78,16 +62,11 @@ describe('Router', () => {
                 amount1: toNano(0)
             }   
         );
-        console.log("should accept ProvideLP message 1");
-
-        printTransactionFees(send.transactions);
-
         expect(send.transactions).toHaveTransaction({
             from: pool.address,
-            to: lpAccount.address,
+            to: LPAccountAddress,
             success: true,
         });
-
         const send1 = await pool.send(
             router.getSender(),
             {
@@ -102,13 +81,9 @@ describe('Router', () => {
                 amount1: toNano(1000)
             }   
         );
-
-        console.log("should accept ProvideLP message 2");
-        printTransactionFees(send1.transactions);
-
         expect(send1.transactions).toHaveTransaction({
             from: pool.address,
-            to: lpAccount.address,
+            to: LPAccountAddress,
             success: true,
         });
 

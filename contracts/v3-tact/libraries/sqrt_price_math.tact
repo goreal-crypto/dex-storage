@@ -69,7 +69,7 @@ fun nextSqrtPriceFromAmount0RoundingUp(
     }
     let numerator1 = liquidity << 96;
     if (add) {
-        let product = amount * sqrtPX96;
+        let product = amount * sqrtPX96; // check for overflow, but tvm throws 4
         if (product / amount == sqrtPX96) {
             let denominator = numerator1 + product;
             if (denominator >= numerator1) {
