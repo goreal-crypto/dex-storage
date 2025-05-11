@@ -13,11 +13,7 @@ struct SwapState {
     tick: Int as int24;
     feeGrowthGlobalX128: Int as uint256;
     liquidity: Int as uint128;
-}
-
-struct TicksMap {
-    data: map<Int as int24, TickInfo>;
-}
+} 
 
 struct PoolState {
     routerAddress: Address;
@@ -26,7 +22,7 @@ struct PoolState {
     tick: Int as int24;
     liquidity: Int as uint128;
     sqrtPriceX96: Int as uint160;
-    ticks: TicksMap;
+    ticks: map<Int as int24, TickInfo>;
     tickSpacing: Int as int24;
     positionCounter: Int as uint64;
     feeGrowthGlobal0X128: Int as uint256;
@@ -44,19 +40,47 @@ struct FeeGrowthInside {
     feeGrowthInside1X128: Int as uint256;
 }
 
-contract Pool(
-    routerAddress: Address,
-    token0Address: Address,
-    token1Address: Address,
-    tick: Int as int24,
-    liquidity: Int as uint128,
-    sqrtPriceX96: Int as uint160,
-    ticks: TicksMap,
-    tickSpacing: Int as int24,
-    positionCounter: Int as uint64,
-    feeGrowthGlobal0X128: Int as uint256,
-    feeGrowthGlobal1X128: Int as uint256,
-    fee: Int as uint24) {
+contract Pool {
+    routerAddress: Address;
+    token0Address: Address;
+    token1Address: Address;
+    tick: Int as int24;
+    liquidity: Int as uint128;
+    sqrtPriceX96: Int as uint160;
+    ticks: map<Int as int24, TickInfo>;
+    tickSpacing: Int as int24;
+    positionCounter: Int as uint64;
+    feeGrowthGlobal0X128: Int as uint256;
+    feeGrowthGlobal1X128: Int as uint256;
+    fee: Int as uint24;
+
+    init(
+        routerAddress: Address,
+        token0Address: Address,
+        token1Address: Address,
+        tick: Int,
+        liquidity: Int,
+        sqrtPriceX96: Int,
+        ticks: map<Int as int24, TickInfo>,
+        tickSpacing: Int,
+        positionCounter: Int,
+        feeGrowthGlobal0X128: Int,
+        feeGrowthGlobal1X128: Int,
+        fee: Int
+    ) {
+        self.routerAddress = routerAddress;
+        self.token0Address = token0Address;
+        self.token1Address = token1Address;
+        self.tick = tick;
+        self.liquidity = liquidity;
+        self.sqrtPriceX96 = sqrtPriceX96;
+        self.ticks = ticks;
+        self.tickSpacing = tickSpacing;
+        self.positionCounter = positionCounter;
+        self.feeGrowthGlobal0X128 = feeGrowthGlobal0X128;
+        self.feeGrowthGlobal1X128 = feeGrowthGlobal1X128;
+        self.fee = fee;
+    }
 
     receive(msg: Initialize) {
         self.sqrtPriceX96 = msg.sqrtPriceX96;
@@ -77,7 +101,7 @@ contract Pool(
         };
         while (state.amountSpecifiedRemaining != 0 && state.sqrtPriceX96 != msg.sqrtPriceLimitX96) {
             let stepSqrtPriceStartX96 = state.sqrtPriceX96;
-            let stepNextTick = nextInitializedTick(state.tick, self.ticks.data, msg.zeroForOne, self.tickSpacing);
+            let stepNextTick = nextInitializedTick(state.tick, self.ticks, msg.zeroForOne, self.tickSpacing);
             if (stepNextTick.tick < MIN_TICK) {
                 stepNextTick.tick = MIN_TICK;
             } else if (stepNextTick.tick > MAX_TICK) {
@@ -101,18 +125,24 @@ contract Pool(
                 state.amountSpecifiedRemaining += step.amountOut;
                 state.amountCalculated += step.amountIn + step.feeAmount; 
             }
+            // if (cache.feeProtocol > 0) {
+            //     uint256 delta = step.feeAmount / cache.feeProtocol;
+            //     step.feeAmount -= delta;
+            //     state.protocolFee += uint128(delta);
+            // }
+            // update global fee tracker
             if (state.liquidity > 0) {
                 state.feeGrowthGlobalX128 += muldiv(step.feeAmount, 0x100000000000000000000000000000000, state.liquidity);
             }
             if (state.sqrtPriceX96 == stepSqrtPriceNextX96) {
                 if (stepNextTick.initialized) {
-                    let tickInfo = self.ticks.data.get(stepNextTick.tick)!!;
+                    let tickInfo = self.ticks.get(stepNextTick.tick)!!;
                     let liquidityNet = tickInfo.liquidityNet;
                     tickInfo.feeGrowthOutside0X128 = 
                         (msg.zeroForOne ? state.feeGrowthGlobalX128 : self.feeGrowthGlobal0X128) - tickInfo.feeGrowthOutside0X128;
                     tickInfo.feeGrowthOutside1X128 = 
                         (msg.zeroForOne ? self.feeGrowthGlobal1X128 : state.feeGrowthGlobalX128) - tickInfo.feeGrowthOutside1X128;
-                    self.ticks.data.set(stepNextTick.tick, tickInfo);
+                    self.ticks.set(stepNextTick.tick, tickInfo);
                     if (msg.zeroForOne) {
                         liquidityNet = -liquidityNet;
                     }
@@ -188,12 +218,9 @@ contract Pool(
 
     receive(msg: MintLiquidity) {
         throwUnless(WRONG_CALLER, getLPAccountStateInit(msg.userAddress, myAddress()).hasSameBasechainAddress(sender()));
-        self.ticks.update(msg.tickLower, msg.tickUpper, msg.liquidity, self.tick, self.feeGrowthGlobal0X128, self.feeGrowthGlobal1X128);
-        let feeGrowthInside = feeGrowthInside(msg.tickLower, msg.tickUpper, self.tick, self.ticks.data, self.feeGrowthGlobal0X128, self.feeGrowthGlobal1X128);
-        let expected = amounts(msg.tickLower, msg.tickUpper, msg.liquidity, self.tick, self.sqrtPriceX96);
-        if (self.tick >= msg.tickLower && self.tick < msg.tickUpper) {
-            self.liquidity += msg.liquidity;
-        }
+        self.update(msg.tickLower, msg.tickUpper, msg.liquidity);
+        let feeGrowthInside = self.feeGrowthInside(msg.tickLower, msg.tickUpper);
+        let expected = self.amounts(msg.tickLower, msg.tickUpper, msg.liquidity);
         throwUnless(INVALID_AMOUNT, msg.amount0 >= expected.amount0 && msg.amount1 >= expected.amount1);
         let positionStateInit: StateInit = getPositionStateInit(self.positionCounter, msg.userAddress, myAddress(), msg.tickLower, msg.tickUpper);
         deploy(DeployParameters{
@@ -212,7 +239,7 @@ contract Pool(
     }
 
     receive(msg: StartBurn) {
-        let feeGrowthInside = feeGrowthInside(msg.tickLower, msg.tickUpper, self.tick, self.ticks.data, self.feeGrowthGlobal0X128, self.feeGrowthGlobal1X128);
+        let feeGrowthInside = self.feeGrowthInside(msg.tickLower, msg.tickUpper);
         let positionStateInit: StateInit = getPositionStateInit(msg.index, sender(), myAddress(), msg.tickLower, msg.tickUpper);
         message(MessageParameters{
             to: contractAddress(positionStateInit),
@@ -231,11 +258,8 @@ contract Pool(
     receive(msg: PositionBurnNotification) {
         let positionStateInit: StateInit = getPositionStateInit(msg.index, msg.userAddress, myAddress(), msg.tickLower, msg.tickUpper);
         throwUnless(INVALID_CALLER, positionStateInit.hasSameBasechainAddress(sender()));
-        self.ticks.update(msg.tickLower, msg.tickUpper, msg.liquidity, self.tick, self.feeGrowthGlobal0X128, self.feeGrowthGlobal1X128);
-        let amountsOut = amounts(msg.tickLower, msg.tickUpper, -msg.liquidity, self.tick, self.sqrtPriceX96);
-        if (self.tick >= msg.tickLower && self.tick < msg.tickUpper) {
-            self.liquidity -= msg.liquidity;
-        }
+        self.update(msg.tickLower, msg.tickUpper, msg.liquidity);
+        let amountsOut = self.amounts(msg.tickLower, msg.tickUpper, -msg.liquidity);
         message(MessageParameters{
             to: self.routerAddress,
             value: 0,
@@ -270,13 +294,135 @@ contract Pool(
     }
 
     get fun getMintEstimate(tickLower: Int, tickUpper: Int, liquidity: Int): Amounts {
-        return amounts(tickLower, tickUpper, liquidity, self.tick, self.sqrtPriceX96);
+        return self.amounts(tickLower, tickUpper, liquidity);
     }
 
     get fun getTicks(tick: Int): TickInfo? {
-        return self.ticks.data.get(tick);
+        return self.ticks.get(tick);
     }
 
+    fun update(tickLower: Int, tickUpper: Int, liquidity: Int) {
+        let flippedLower: Bool = false;
+        let flippedUpper: Bool = false;
+        if (liquidity != 0) { 
+            flippedLower = self.updateTicks(tickLower, liquidity, false);
+            flippedUpper = self.updateTicks(tickUpper, liquidity, true);
+        }
+        if (liquidity < 0) {
+            if (flippedLower) {
+                self.ticks.del(tickLower);
+            }
+            if (flippedUpper) {
+                self.ticks.del(tickUpper);
+            }
+        }
+    }
+
+    fun amounts(tickLower: Int, tickUpper: Int, liquidity: Int): Amounts {
+        let result = Amounts{
+            amount0: 0,
+            amount1: 0,
+        };
+        if (liquidity != 0) { // is this neccessary?
+            if (self.tick < tickLower) {
+                result.amount0 = amount0Delta(
+                    sqrtRatioAtTick(tickLower),
+                    sqrtRatioAtTick(tickUpper),
+                    liquidity
+                );
+            } else if (self.tick < tickUpper) {
+                result.amount0 = amount0Delta(
+                    self.sqrtPriceX96,
+                    sqrtRatioAtTick(tickUpper),
+                    liquidity
+                );
+                result.amount1 = amount1Delta(
+                    sqrtRatioAtTick(tickLower),
+                    self.sqrtPriceX96,
+                    liquidity
+                );
+                self.liquidity += liquidity;
+            } else {
+                result.amount1 = amount1Delta(
+                    sqrtRatioAtTick(tickLower),
+                    sqrtRatioAtTick(tickUpper),
+                    liquidity
+                );
+            }
+        }
+        return result;
+    }
+
+    fun updateTicks(tick: Int, liquidityDelta: Int, upper: Bool): Bool {
+        let tickInfoMaybe: TickInfo? = self.ticks.get(tick);
+        let tickInfo: TickInfo = tickInfoMaybe == null 
+            ? TickInfo{
+                liquidityGross: 0, 
+                liquidityNet: 0, 
+                feeGrowthOutside0X128: 0, 
+                feeGrowthOutside1X128: 0
+            } 
+            : tickInfoMaybe!!;
+        let liquidityGrossBefore: Int = tickInfo.liquidityGross;
+        let liquidityGrossAfter: Int = liquidityGrossBefore + liquidityDelta;
+        let flipped: Bool = (liquidityGrossAfter == 0) != (liquidityGrossBefore == 0);
+        if (liquidityGrossBefore == 0) {
+            if (tick <= self.tick) {
+                tickInfo.feeGrowthOutside0X128 = self.feeGrowthGlobal0X128;
+                tickInfo.feeGrowthOutside1X128 = self.feeGrowthGlobal1X128;
+            }
+        } 
+        tickInfo.liquidityGross = liquidityGrossAfter;
+        tickInfo.liquidityNet = upper 
+                                ? tickInfo.liquidityNet - liquidityDelta
+                                : tickInfo.liquidityNet + liquidityDelta;
+        self.ticks.set(tick, tickInfo);
+        return flipped;
+    }
+
+    fun feeGrowthInside(tickLower: Int, tickUpper: Int): FeeGrowthInside {
+        let tickCurrent = self.tick;
+        let lowerMaybe = self.ticks.get(tickLower);
+        let lower = lowerMaybe == null
+            ? TickInfo{
+                liquidityGross: 0, 
+                liquidityNet: 0, 
+                feeGrowthOutside0X128: 0, 
+                feeGrowthOutside1X128: 0
+            } 
+            : lowerMaybe!!;
+        let upperMaybe = self.ticks.get(tickUpper);
+        let upper = upperMaybe == null
+            ? TickInfo{
+                liquidityGross: 0, 
+                liquidityNet: 0, 
+                feeGrowthOutside0X128: 0, 
+                feeGrowthOutside1X128: 0
+            } 
+            : upperMaybe!!;
+        let feeGrowthBelow0X128 = 0;
+        let feeGrowthBelow1X128 = 0;
+        if (tickCurrent >= tickLower) {
+            feeGrowthBelow0X128 = lower.feeGrowthOutside0X128;
+            feeGrowthBelow1X128 = lower.feeGrowthOutside1X128;
+        } else {
+            feeGrowthBelow0X128 = self.feeGrowthGlobal0X128 - lower.feeGrowthOutside0X128;
+            feeGrowthBelow1X128 = self.feeGrowthGlobal1X128 - lower.feeGrowthOutside1X128;
+        }
+        let feeGrowthAbove0X128 = 0;
+        let feeGrowthAbove1X128 = 0;
+        if (tickCurrent < tickUpper) {
+            feeGrowthAbove0X128 = upper.feeGrowthOutside0X128;
+            feeGrowthAbove1X128 = upper.feeGrowthOutside1X128;
+        } else {
+            feeGrowthAbove0X128 = self.feeGrowthGlobal0X128 - upper.feeGrowthOutside0X128;
+            feeGrowthAbove1X128 = self.feeGrowthGlobal1X128 - upper.feeGrowthOutside1X128;
+        }
+        return FeeGrowthInside {
+            feeGrowthInside0X128: self.feeGrowthGlobal0X128 - feeGrowthBelow0X128 - feeGrowthAbove0X128,
+            feeGrowthInside1X128: self.feeGrowthGlobal1X128 - feeGrowthBelow1X128 - feeGrowthAbove1X128
+        };
+    }
 }
 
 fun getPositionStateInit(index: Int, userAddress: Address, poolAddress: Address, tickLower: Int, tickUpper: Int): StateInit {
@@ -299,149 +445,4 @@ fun getLPAccountStateInit(userAddress: Address, poolAddress: Address): StateInit
         0,
         0
     );
-}
-
-extends mutates fun update(
-    self: TicksMap, 
-    tickLower: Int, 
-    tickUpper: Int, 
-    liquidity: Int,
-    tickCurrent: Int,
-    feeGrowthGlobal0X128: Int,
-    feeGrowthGlobal1X128: Int
-) {
-    let flippedLower: Bool = false;
-    let flippedUpper: Bool = false;
-    if (liquidity != 0) { 
-        flippedLower = self.updateTicks(tickLower, liquidity, false, tickCurrent, feeGrowthGlobal0X128, feeGrowthGlobal1X128);
-        flippedUpper = self.updateTicks(tickUpper, liquidity, true, tickCurrent, feeGrowthGlobal0X128, feeGrowthGlobal1X128);
-    }
-    if (liquidity < 0) {
-        if (flippedLower) {
-            self.data.del(tickLower);
-        }
-        if (flippedUpper) {
-            self.data.del(tickUpper);
-        }
-    }
-}
-
-fun amounts(tickLower: Int, tickUpper: Int, liquidity: Int, tickCurrent: Int, sqrtPriceX96: Int): Amounts {
-    let result = Amounts{
-        amount0: 0,
-        amount1: 0,
-    };
-    if (liquidity != 0) { 
-        if (tickCurrent < tickLower) {
-            result.amount0 = amount0Delta(
-                sqrtRatioAtTick(tickLower),
-                sqrtRatioAtTick(tickUpper),
-                liquidity
-            );
-        } else if (tickCurrent < tickUpper) {
-            result.amount0 = amount0Delta(
-                sqrtPriceX96,
-                sqrtRatioAtTick(tickUpper),
-                liquidity
-            );
-            result.amount1 = amount1Delta(
-                sqrtRatioAtTick(tickLower),
-                sqrtPriceX96,
-                liquidity
-            );
-        } else {
-            result.amount1 = amount1Delta(
-                sqrtRatioAtTick(tickLower),
-                sqrtRatioAtTick(tickUpper),
-                liquidity
-            );
-        }
-    }
-    return result;
-}
-
-extends mutates fun updateTicks(
-    self: TicksMap, 
-    tick: Int, 
-    liquidityDelta: Int, 
-    upper: Bool, 
-    tickCurrent: Int,
-    feeGrowthGlobal0X128: Int,
-    feeGrowthGlobal1X128: Int
-): Bool {
-    let tickInfoMaybe: TickInfo? = self.data.get(tick);
-    let tickInfo: TickInfo = tickInfoMaybe == null 
-        ? TickInfo{
-            liquidityGross: 0, 
-            liquidityNet: 0, 
-            feeGrowthOutside0X128: 0, 
-            feeGrowthOutside1X128: 0
-        } 
-        : tickInfoMaybe!!;
-    let liquidityGrossBefore: Int = tickInfo.liquidityGross;
-    let liquidityGrossAfter: Int = liquidityGrossBefore + liquidityDelta;
-    let flipped: Bool = (liquidityGrossAfter == 0) != (liquidityGrossBefore == 0);
-    if (liquidityGrossBefore == 0) {
-        if (tick <= tickCurrent) {
-            tickInfo.feeGrowthOutside0X128 = feeGrowthGlobal0X128;
-            tickInfo.feeGrowthOutside1X128 = feeGrowthGlobal1X128;
-        }
-    } 
-    tickInfo.liquidityGross = liquidityGrossAfter;
-    tickInfo.liquidityNet = upper 
-                            ? tickInfo.liquidityNet - liquidityDelta
-                            : tickInfo.liquidityNet + liquidityDelta;
-    self.data.set(tick, tickInfo);
-    return flipped;
-}
-
-fun feeGrowthInside(
-    tickLower: Int, 
-    tickUpper: Int, 
-    tick: Int, 
-    ticks: map<Int as int24, TickInfo>, 
-    feeGrowthGlobal0X128: Int, 
-    feeGrowthGlobal1X128: Int
-    ): FeeGrowthInside {
-    let tickCurrent = tick;
-    let lowerMaybe = ticks.get(tickLower);
-    let lower = lowerMaybe == null
-        ? TickInfo{
-            liquidityGross: 0, 
-            liquidityNet: 0, 
-            feeGrowthOutside0X128: 0, 
-            feeGrowthOutside1X128: 0
-        } 
-        : lowerMaybe!!;
-    let upperMaybe = ticks.get(tickUpper);
-    let upper = upperMaybe == null
-        ? TickInfo{
-            liquidityGross: 0, 
-            liquidityNet: 0, 
-            feeGrowthOutside0X128: 0, 
-            feeGrowthOutside1X128: 0
-        } 
-        : upperMaybe!!;
-    let feeGrowthBelow0X128 = 0;
-    let feeGrowthBelow1X128 = 0;
-    if (tickCurrent >= tickLower) {
-        feeGrowthBelow0X128 = lower.feeGrowthOutside0X128;
-        feeGrowthBelow1X128 = lower.feeGrowthOutside1X128;
-    } else {
-        feeGrowthBelow0X128 = feeGrowthGlobal0X128 - lower.feeGrowthOutside0X128;
-        feeGrowthBelow1X128 = feeGrowthGlobal1X128 - lower.feeGrowthOutside1X128;
-    }
-    let feeGrowthAbove0X128 = 0;
-    let feeGrowthAbove1X128 = 0;
-    if (tickCurrent < tickUpper) {
-        feeGrowthAbove0X128 = upper.feeGrowthOutside0X128;
-        feeGrowthAbove1X128 = upper.feeGrowthOutside1X128;
-    } else {
-        feeGrowthAbove0X128 = feeGrowthGlobal0X128 - upper.feeGrowthOutside0X128;
-        feeGrowthAbove1X128 = feeGrowthGlobal1X128 - upper.feeGrowthOutside1X128;
-    }
-    return FeeGrowthInside {
-        feeGrowthInside0X128: feeGrowthGlobal0X128 - feeGrowthBelow0X128 - feeGrowthAbove0X128,
-        feeGrowthInside1X128: feeGrowthGlobal1X128 - feeGrowthBelow1X128 - feeGrowthAbove1X128
-    };
 }

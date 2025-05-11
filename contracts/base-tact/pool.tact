@@ -48,27 +48,26 @@ contract Pool {
     receive(){}
 
 
-    fun getAmountOut(hasRef: Bool, amountIn: Int, reserveIn: Int, reserveOut: Int): AmountOut {
-        // let baseOut: Int = (amountIn * reserveOut) / (reserveIn + amountIn);
-        let amountInWithFee: Int = amountIn * (FEE_DIVIDER - self.LPFee);
-        let baseOut: Int = (amountInWithFee * reserveOut) / (reserveIn * FEE_DIVIDER + amountInWithFee);
-        let protocolFeeOut: Int = 0;
-        let refFeeOut: Int = 0;
-        if (self.protocolFee > 0) {
-            protocolFeeOut =  divc(baseOut * self.protocolFee, FEE_DIVIDER)
-        }
-        if (hasRef && (self.refFee > 0)) {
-            refFeeOut = divc(baseOut * self.refFee, FEE_DIVIDER);
-        }
-        
-        baseOut -= protocolFeeOut + refFeeOut;
-                
-        return AmountOut{
-            out: baseOut,
-            protocolFeeOut: protocolFeeOut,
-            refFeeOut: refFeeOut
-        };
+fun getAmountOut(hasRef: Bool, amountIn: Int, reserveIn: Int, reserveOut: Int): AmountOut {
+    let amountInWithFee: Int = amountIn * (FEE_DIVIDER - self.LPFee);
+    let baseOut: Int = (amountInWithFee * reserveOut) / (reserveIn * FEE_DIVIDER + amountInWithFee);
+    let protocolFeeOut: Int = 0;
+    let refFeeOut: Int = 0;
+    if (self.protocolFee > 0) {
+        protocolFeeOut =  divc(baseOut * self.protocolFee, FEE_DIVIDER)
     }
+    if (hasRef && (self.refFee > 0)) {
+        refFeeOut = divc(baseOut * self.refFee, FEE_DIVIDER);
+    }
+    
+    baseOut -= protocolFeeOut + refFeeOut;
+            
+    return AmountOut{
+        out: baseOut,
+        protocolFeeOut: protocolFeeOut,
+        refFeeOut: refFeeOut
+    };
+}
 
     receive(msg: JettonBurnNotification) {
         let gasRequired = getGasFee(25000, WORKCHAIN);
@@ -125,14 +124,14 @@ contract Pool {
         let liquidity: Int = 0;
         let to: Address = emptyAddress(); 
 
-        if (self.totalSupplyLP == 0) {
-            liquidity = sqrt(msg.amount0 * msg.amount1) / REQUIRED_MIN_LIQUIDITY;
-        } else {
-            let toMint0 = (msg.amount0 * self.totalSupplyLP) / self.reserve0;
-            let toMint1 = (msg.amount1 * self.totalSupplyLP) / self.reserve1;
-            liquidity = min(toMint0, toMint1);
-            to = msg.userAddress;
-        }
+if (self.totalSupplyLP == 0) {
+    liquidity = sqrt(msg.amount0 * msg.amount1) / REQUIRED_MIN_LIQUIDITY;
+} else {
+    let toMint0 = (msg.amount0 * self.totalSupplyLP) / self.reserve0;
+    let toMint1 = (msg.amount1 * self.totalSupplyLP) / self.reserve1;
+    liquidity = min(toMint0, toMint1);
+    to = msg.userAddress;
+}
 
         self.reserve0 += msg.amount0;
         self.reserve1 += msg.amount1;

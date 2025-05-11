@@ -7,9 +7,9 @@ import { TickMathTest } from "../build/TickMathTest/tact_TickMathTest";
 import { randomInt } from "crypto"; 
 
 const main = async () => {
-    const NUM_SAMPLES = 100; 
+    const NUM_SAMPLES = 50; 
     const TICK_SPACING = 100n; 
-    const MAX_TICKS = 50; 
+    const MAX_TICKS = 30; 
     let liquidity = 10n ** 10n;
     let results: {mean: number[], variance: number[]} = {
         mean: [],
@@ -34,8 +34,11 @@ const main = async () => {
                 0n,
                 0n,
                 0n,
-                Dictionary.empty(),
+                {$$type: "TicksMap", data: Dictionary.empty()},
                 1n,
+                0n,
+                0n,
+                0n,
                 0n
             ));
 

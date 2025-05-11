@@ -220,9 +220,7 @@ describe('Router', () => {
             from: router.address,
             to: poolAddress,
         });
-
         console.log("SWAP GAS RESULT: ", getUsedGasInternal(send, {type: "chain"}))
-
     });
 
     it("should route provideLP message", async () =>{
@@ -300,9 +298,7 @@ describe('Router', () => {
                     .asSlice()
             }
         );
-
         printTransactionFees(sendLP2.transactions);
-
         const sendBurn = await lpWallet.send(
             user.getSender(),
             {
@@ -316,9 +312,7 @@ describe('Router', () => {
                 customPayload: null,
             }    
         )
-
         printTransactionFees(sendBurn.transactions);
-
     });
 
 });

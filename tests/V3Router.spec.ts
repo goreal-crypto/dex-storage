@@ -10,7 +10,7 @@ describe("V3Router", () => {
     let blockchain: Blockchain;
     let user: SandboxContract<TreasuryContract>;
     let admin: SandboxContract<TreasuryContract>;
-    let router: SandboxContract<>;
+    let router: SandboxContract<TreasuryContract>;
     let token0: SandboxContract<TreasuryContract>;
     let token1: SandboxContract<TreasuryContract>;
     let token2: SandboxContract<TreasuryContract>;
@@ -20,7 +20,6 @@ describe("V3Router", () => {
         blockchain = await Blockchain.create();
         user = await blockchain.treasury("user");
         admin = await blockchain.treasury("admin");
-        router = await blockchain.treasury("router");
         token0 = await blockchain.treasury("token0Address");
         token1 = await blockchain.treasury("token1Address");
         token2 = await blockchain.treasury("token2Address");
