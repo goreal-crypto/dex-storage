@@ -1,18 +1,11 @@
 import "./messages";
 
-contract LPAccount {
-    userAddress: Address;
-    poolAddress: Address;
-    amount0: Int as coins;
-    amount1: Int as coins;
-
-    init(userAddress: Address, poolAddress: Address, amount0: Int, amount1: Int) {
-        self.userAddress = userAddress;
-        self.poolAddress = poolAddress;
-        self.amount0 = amount0;
-        self.amount1 = amount1;
-    }
-    
+contract LPAccount (
+    userAddress: Address,
+    poolAddress: Address,
+    amount0: Int as coins,
+    amount1: Int as coins,
+){    
     receive(){}
 
     receive(msg: AddLiquidity) {

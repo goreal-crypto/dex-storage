@@ -67,7 +67,7 @@ describe("V3Pool", () => {
             0n,
             0n,
             0n,
-            Dictionary.empty(),
+            {$$type: "TicksMap", data: Dictionary.empty()},
             1n,
             0n,
             0n,
@@ -152,12 +152,11 @@ describe("V3Pool", () => {
         it("mint entirely above and below current tick", async () => {
             const liquidity = 1n * 10n ** 18n;
         
-            // current tick == 0
-            await mint(100n, 200n, liquidity); // above current tick
-            await mint(-200n, -100n, liquidity); // below current tick
+
+            await mint(100n, 200n, liquidity); 
+            await mint(-200n, -100n, liquidity); 
         
             const poolState = await pool.getGetPoolState();
-            // liquidity на диапазонах вне current tick не влияет на текущую активную ликвидность
             expect(poolState.liquidity).toBe(0n);
         });
         it("mint across current tick increases active liquidity", async () => {
@@ -240,6 +239,150 @@ describe("V3Pool", () => {
             const poolState = await pool.getGetPoolState();
             console.log("Pool state after burn:", poolState);
         });
+    });
+
+    describe("Swap fees accumulation", () => {
+        const tickLower = -1000n;
+        const tickUpper = 1000n;
+        const liquidity = 1n * 10n ** 18n;
+        let initialFeeGrowthGlobal0: bigint;
+        let initialFeeGrowthGlobal1: bigint;
+    
+        beforeEach(async () => {
+            await pool.send(
+                admin.getSender(),
+                { value: toNano("1") },
+                {
+                    $$type: "Initialize",
+                    queryId: 0n,
+                    sqrtPriceX96: BigInt(encodeSqrtRatioX96(1, 1).toString())
+                }
+            );
+            await mint(tickLower, tickUpper, liquidity);
+            
+            const poolState = await pool.getGetPoolState();
+            initialFeeGrowthGlobal0 = poolState.feeGrowthGlobal0X128;
+            initialFeeGrowthGlobal1 = poolState.feeGrowthGlobal1X128;
+        });
+    
+        it("should accumulate fees in global counters on swap", async () => {
+            const amountIn = 1n * 10n ** 15n; // 0.001 Token
+            const limit = BigInt(encodeSqrtRatioX96(1, 2).toString());
+    
+            await pool.send(
+                router.getSender(),
+                { value: toNano("1") },
+                {
+                    $$type: "Swap",
+                    queryId: 0n,
+                    userAddress: user.address,
+                    zeroForOne: true,
+                    amountSpecified: amountIn,
+                    sqrtPriceLimitX96: limit
+                }
+            );
+    
+            const poolState = await pool.getGetPoolState();
+            const expectedFee = amountIn * 100n / 10000n; // 1% fee
+            const expectedFeeGrowth = expectedFee * 2n ** 128n / liquidity;
+            
+            expect(poolState.feeGrowthGlobal0X128).toBe(initialFeeGrowthGlobal0 + expectedFeeGrowth);
+        });
+    
+        it("should update feeGrowthOutside when crossing ticks", async () => {
+            // Создаем позицию, которую будем пересекать
+            await mint(-500n, 500n, liquidity);
+            
+            // Выполняем swap, пересекающий тики
+            const amountIn = 1n * 10n ** 18n;
+            const limit = BigInt(encodeSqrtRatioX96(1, 10).toString());
+            console.log(await pool.getGetPoolState())
+            await pool.send(
+                router.getSender(),
+                { value: toNano("1") },
+                {
+                    $$type: "Swap",
+                    queryId: 0n,
+                    userAddress: user.address,
+                    zeroForOne: true, // Важно: направление свопа
+                    amountSpecified: 600n,
+                    sqrtPriceLimitX96: limit
+                }
+            );
+            console.log(await pool.getGetPoolState())
+            // Получаем обновленные данные
+            const lowerTick = await pool.getGetTicks(-500n);
+            const upperTick = await pool.getGetTicks(500n);
+            const poolState = await pool.getGetPoolState();
+            
+            // Проверяем обновление feeGrowthOutside
+            // if (poolState.tick >= -500n) {
+                expect(lowerTick?.feeGrowthOutside0X128)
+                    .toBe(poolState.feeGrowthGlobal0X128 - lowerTick!.feeGrowthOutside0X128);
+            // } else {
+                // expect(lowerTick?.feeGrowthOutside0X128)
+                    // .toBe(poolState.feeGrowthGlobal0X128);
+            // }
+            
+            // if (poolState.tick < 500n) {
+                expect(upperTick?.feeGrowthOutside1X128)
+                    .toBe(poolState.feeGrowthGlobal1X128 - upperTick!.feeGrowthOutside1X128);
+            // } else {
+                // expect(upperTick?.feeGrowthOutside1X128)
+                    // .toBe(poolState.feeGrowthGlobal1X128);
+            // }
+        });
+    });
+    
+    describe("Fee calculations for positions", () => {
+        const tickLower = -2000n;
+        const tickUpper = 2000n;
+        const liquidity = 2n * 10n ** 18n;
+    
+        beforeEach(async () => {
+            await pool.send(
+                admin.getSender(),
+                { value: toNano("1") },
+                {
+                    $$type: "Initialize",
+                    queryId: 0n,
+                    sqrtPriceX96: BigInt(encodeSqrtRatioX96(1, 1).toString())
+                }
+            );
+            await mint(tickLower, tickUpper, liquidity);
+        });
+    
+        it("should calculate correct fees for position", async () => {
+            // Perform multiple swaps
+            const swapAmount = 5n * 10n ** 15n;
+            const limit = BigInt(encodeSqrtRatioX96(1, 2).toString());
+    
+            for (let i = 0; i < 3; i++) {
+                await pool.send(
+                    router.getSender(),
+                    { value: toNano("1") },
+                    {
+                        $$type: "Swap",
+                        queryId: 0n,
+                        userAddress: user.address,
+                        zeroForOne: true,
+                        amountSpecified: swapAmount,
+                        sqrtPriceLimitX96: limit
+                    }
+                );
+            }
+    
+            // Check fee growth inside
+            const poolState = await pool.getGetPoolState();
+            // const feeGrowthInside = await pool.getGetFeeGrowthInside(tickLower, tickUpper);
+            
+            const expectedFee = 3n * swapAmount * 100n / 10000n;
+            const expectedGrowth = expectedFee * 2n ** 128n / liquidity;
+            
+            // expect(feeGrowthInside.feeGrowthInside0X128).toBe(expectedGrowth);
+            // expect(feeGrowthInside.feeGrowthInside1X128).toBe(0n);
+        });
+    
     });
     
 });

@@ -6,6 +6,44 @@ import { getUsedGasInternal } from "../utils/gas";
 import { TickMathTest } from "../build/TickMathTest/tact_TickMathTest";
 import { randomInt } from "crypto"; 
 
+const toncomint = [
+    {
+        opcode: 0x4468de77n,
+        gas: 11639
+    },
+    {
+        opcode: 0x3ebe5431n,
+        gas: 4347
+    },
+    {
+        opcode: 0x4468de77n,
+        gas: 11639
+    },
+    {
+        opcode: 0x3ebe5431n,
+        gas: 6915
+    },
+    {
+        opcode: 0xd5ecca2a,
+        gas: 5295
+    },
+]
+
+const toncoburn = [
+    {
+        opcode: 0x530b5f2cn,
+        gas: 16511
+    },
+    {
+        opcode: 0x46ca335an,
+        gas: 10053
+    },
+    {
+        opcode: 0xd73ac09dn,
+        gas: 25688
+    },
+]
+
 const main = async () => {
     let blockchain = await Blockchain.create();
     let user = await blockchain.treasury("user_");
@@ -58,6 +96,7 @@ const main = async () => {
             tickUpper: tickUpper
         }
     );
+    console.log("MINT1 GAS: ", getUsedGasInternal(mint1, {type: "chain"}))
     const mint2 = await pool.send(
         router.getSender(),
         {value: toNano("1")},

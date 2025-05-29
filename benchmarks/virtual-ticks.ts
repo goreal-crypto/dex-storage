@@ -18,7 +18,7 @@ const main = async () => {
     const results: number[] = [];
 
     for (let i = 1; i <= MAX_CROSSED_TICKS; i++) {
-        const targetTick = BASE_TICK * BigInt(i);
+        const targetTick = BASE_TICK * BigInt(i - 1);
         let gasResults: number[] = [];
 
         for (let sample = 0; sample < NUM_SAMPLES; sample++) {
@@ -49,7 +49,7 @@ const main = async () => {
             const tickMathTest = blockchain.openContract(await TickMathTest.fromInit());
             await tickMathTest.send(user.getSender(), {value: toNano("1")}, null);
             // Инициализация пула с начальной ценой (в центре первого диапазона)
-            const initialSqrtPrice = await tickMathTest.getGetSqrtRatioAtTick(MIN_TICK + TICK_SPACING/2n);
+            const initialSqrtPrice = await tickMathTest.getGetSqrtRatioAtTick(-1n);
             await pool.send(admin.getSender(), {value: toNano("1")}, {
                 $$type: "Initialize",
                 queryId: 0n,

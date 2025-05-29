@@ -3,79 +3,51 @@ import "./messages";
 import "./lp_wallet";
 import "./gas";
 
-contract Pool {
-    routerAddress: Address;
-    LPFee: Int as uint8;
-    protocolFee: Int as uint8;
-    refFee: Int as uint8;
-    token0Address: Address;
-    token1Address: Address;
-    totalSupplyLP: Int as coins; 
-    collectedToken0ProtocolFee: Int as coins;
-    collectedToken1ProtocolFee: Int as coins; 
-    protocolFeeAddress: Address;
-    reserve0: Int as coins;
-    reserve1: Int as coins; 
-
-    init(
-        routerAddress: Address,
-        LPFee: Int,
-        protocolFee: Int,
-        refFee: Int,
-        token0Address: Address,
-        token1Address: Address,
-        totalSupplyLP: Int,
-        collectedToken0ProtocolFee: Int,
-        collectedToken1ProtocolFee: Int,
-        protocolFeeAddress: Address,
-        reserve0: Int,
-        reserve1: Int,
-    ) {
-        self.routerAddress = routerAddress;
-        self.LPFee = LPFee;
-        self.protocolFee = protocolFee;
-        self.refFee = refFee;
-        self.token0Address = token0Address;
-        self.token1Address = token1Address;
-        self.totalSupplyLP = totalSupplyLP;
-        self.collectedToken0ProtocolFee = collectedToken0ProtocolFee;
-        self.collectedToken1ProtocolFee = collectedToken1ProtocolFee;
-        self.protocolFeeAddress = protocolFeeAddress;
-        self.reserve0 = reserve0;
-        self.reserve1 = reserve1;
-    }
-
+contract Pool (
+    routerAddress: Address,
+    LPFee: Int as uint8,
+    protocolFee: Int as uint8,
+    refFee: Int as uint8,
+    token0Address: Address,
+    token1Address: Address,
+    totalSupplyLP: Int as coins,
+    collectedToken0ProtocolFee: Int as coins,
+    collectedToken1ProtocolFee: Int as coins,
+    protocolFeeAddress: Address,
+    reserve0: Int as coins,
+    reserve1: Int as coins,
+) {    
     receive(){}
 
 
-fun getAmountOut(hasRef: Bool, amountIn: Int, reserveIn: Int, reserveOut: Int): AmountOut {
-    let amountInWithFee: Int = amountIn * (FEE_DIVIDER - self.LPFee);
-    let baseOut: Int = (amountInWithFee * reserveOut) / (reserveIn * FEE_DIVIDER + amountInWithFee);
-    let protocolFeeOut: Int = 0;
-    let refFeeOut: Int = 0;
-    if (self.protocolFee > 0) {
-        protocolFeeOut =  divc(baseOut * self.protocolFee, FEE_DIVIDER)
+    fun getAmountOut(hasRef: Bool, amountIn: Int, reserveIn: Int, reserveOut: Int): AmountOut {
+        let amountInWithFee: Int = amountIn * (FEE_DIVIDER - self.LPFee);
+        let baseOut: Int = (amountInWithFee * reserveOut) / (reserveIn * FEE_DIVIDER + amountInWithFee);
+        let protocolFeeOut: Int = 0;
+        let refFeeOut: Int = 0;
+        if (self.protocolFee > 0) {
+            protocolFeeOut =  divc(baseOut * self.protocolFee, FEE_DIVIDER)
+        }
+        if (hasRef && (self.refFee > 0)) {
+            refFeeOut = divc(baseOut * self.refFee, FEE_DIVIDER);
+        }
+        
+        baseOut -= protocolFeeOut + refFeeOut;
+                
+        return AmountOut{
+            out: baseOut,
+            protocolFeeOut: protocolFeeOut,
+            refFeeOut: refFeeOut
+        };
     }
-    if (hasRef && (self.refFee > 0)) {
-        refFeeOut = divc(baseOut * self.refFee, FEE_DIVIDER);
-    }
-    
-    baseOut -= protocolFeeOut + refFeeOut;
-            
-    return AmountOut{
-        out: baseOut,
-        protocolFeeOut: protocolFeeOut,
-        refFeeOut: refFeeOut
-    };
-}
 
     receive(msg: JettonBurnNotification) {
         let gasRequired = getGasFee(25000, WORKCHAIN);
         let ctx = context();
         let msgValue = ctx.value;
         throwUnless(INSUFFICIENT_GAS, (msgValue > gasRequired) && (msgValue > ctx.readForwardFee()));
-        let LPWalletAddress = contractAddress(getLPWalletStateInit(msg.sender, myAddress()));
-        throwUnless(INVALID_CALLER, sender() == LPWalletAddress);
+        let lpWalletStateInit = getLPWalletStateInit(msg.sender, myAddress());
+        throwUnless(INVALID_CALLER, lpWalletStateInit.hasSameBasechainAddress(sender()));
         throwUnless(ZERO_OUTPUT, msg.amount > 0);
         let amount0Out = (msg.amount * self.reserve0) / self.totalSupplyLP;
         let amount1Out = (msg.amount * self.reserve1) / self.totalSupplyLP;
@@ -118,20 +90,19 @@ fun getAmountOut(hasRef: Bool, amountIn: Int, reserveIn: Int, reserveOut: Int): 
 
     receive(msg: CbAddLiquidity) {
         let LPAccountStateInit: StateInit = getLPAccountStateInit(msg.userAddress, myAddress());
-        let LPAccountAddress: Address = contractAddress(LPAccountStateInit);
-        throwUnless(INVALID_CALLER, sender() == LPAccountAddress);
+        throwUnless(INVALID_CALLER, LPAccountStateInit.hasSameBasechainAddress(sender()));
 
         let liquidity: Int = 0;
         let to: Address = emptyAddress(); 
 
-if (self.totalSupplyLP == 0) {
-    liquidity = sqrt(msg.amount0 * msg.amount1) / REQUIRED_MIN_LIQUIDITY;
-} else {
-    let toMint0 = (msg.amount0 * self.totalSupplyLP) / self.reserve0;
-    let toMint1 = (msg.amount1 * self.totalSupplyLP) / self.reserve1;
-    liquidity = min(toMint0, toMint1);
-    to = msg.userAddress;
-}
+        if (self.totalSupplyLP == 0) {
+            liquidity = sqrt(msg.amount0 * msg.amount1) / REQUIRED_MIN_LIQUIDITY;
+        } else {
+            let toMint0 = (msg.amount0 * self.totalSupplyLP) / self.reserve0;
+            let toMint1 = (msg.amount1 * self.totalSupplyLP) / self.reserve1;
+            liquidity = min(toMint0, toMint1);
+            to = msg.userAddress;
+        }
 
         self.reserve0 += msg.amount0;
         self.reserve1 += msg.amount1;
@@ -215,6 +186,9 @@ if (self.totalSupplyLP == 0) {
             tmpAmount1 = msg.jettonAmount;
         }
 
+        // dump(self.totalSupplyLP);
+        // dump(amountOut.out);
+        // dump(msg.minOutput);
         if ((self.totalSupplyLP <= 0) || (amountOut.out <= 0) || (msg.minOutput >= amountOut.out)) {
             message(MessageParameters{
                 to: self.routerAddress,
@@ -233,7 +207,6 @@ if (self.totalSupplyLP == 0) {
             });
             return;
         }
-
         if (tmpAmount0 > 0) {
             self.reserve0 += msg.jettonAmount;
             self.reserve1 -= (amountOut.out + amountOut.protocolFeeOut + amountOut.refFeeOut);

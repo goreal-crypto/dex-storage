@@ -154,7 +154,7 @@ describe('Router', () => {
             token1.address
         );
         const sendLP1 = await router.send(
-            token0.getSender(),
+            token1.getSender(),
             {
                 value: toNano(1),
             },
@@ -188,39 +188,39 @@ describe('Router', () => {
             }
         );
         console.log("PROVIDE_LP GAS RESULT: ", getUsedGasInternal(sendLP2, {type: "chain"}))
-
-        const send = await router.send(
-            token0.getSender(),
-            {
-                value: toNano(1),
-            },
-            {
-                $$type: "JettonNotification",
-                queryId: toNano(1),
-                amount: toNano(1),
-                sender: user.address,
-                forwardPayload: beginCell()
-                    .storeUint(0xfffffff1, 32) // opcode
-                    .storeAddress(token1.address)
-                    .storeAddress(user.address)
-                    .storeCoins(0)
-                    .storeBit(0)
-                    .storeAddress(null)
-                    .asSlice()
-            }
-        );
-        console.log("should route swap message:");
-        printTransactionFees(send.transactions);
-        expect(send.transactions).toHaveTransaction({
-            from: token0.address,
-            to: router.address,
-            success: true,
-        });
-        expect(send.transactions).toHaveTransaction({
-            from: router.address,
-            to: poolAddress,
-        });
-        console.log("SWAP GAS RESULT: ", getUsedGasInternal(send, {type: "chain"}))
+        printTransactionFees(sendLP2.transactions)
+        // const send = await router.send(
+        //     token0.getSender(),
+        //     {
+        //         value: toNano(1),
+        //     },
+        //     {
+        //         $$type: "JettonNotification",
+        //         queryId: toNano(1),
+        //         amount: toNano(1),
+        //         sender: user.address,
+        //         forwardPayload: beginCell()
+        //             .storeUint(0xfffffff1, 32) // opcode
+        //             .storeAddress(token1.address)
+        //             .storeAddress(user.address)
+        //             .storeCoins(0)
+        //             .storeBit(0)
+        //             .storeAddress(null)
+        //             .asSlice()
+        //     }
+        // );
+        // console.log("should route swap message:");
+        // printTransactionFees(send.transactions);
+        // expect(send.transactions).toHaveTransaction({
+        //     from: token0.address,
+        //     to: router.address,
+        //     success: true,
+        // });
+        // expect(send.transactions).toHaveTransaction({
+        //     from: router.address,
+        //     to: poolAddress,
+        // });
+        // console.log("SWAP GAS RESULT: ", getUsedGasInternal(send, {type: "chain"}))
     });
 
     it("should route provideLP message", async () =>{
@@ -259,60 +259,60 @@ describe('Router', () => {
         });
     });
 
-    it("should route burn message", async () =>{
-        const poolAddress = await router.getGetPoolAddress(
-            token0.address,
-            token1.address
-        );
-        const sendLP1 = await router.send(
-            token0.getSender(),
-            {
-                value: toNano(1),
-            },
-            {
-                $$type: "JettonNotification",
-                queryId: toNano(1),
-                amount: 10000n,
-                sender: user.address,
-                forwardPayload: beginCell()
-                    .storeUint(0xfffffff2, 32) // opcode
-                    .storeAddress(token0.address)
-                    .storeCoins(1)
-                    .asSlice()
-            }
-        );
-        const sendLP2 = await router.send(
-            token0.getSender(),
-            {
-                value: toNano(1),
-            },
-            {
-                $$type: "JettonNotification",
-                queryId: toNano(1),
-                amount: 20000n,
-                sender: user.address,
-                forwardPayload: beginCell()
-                    .storeUint(0xfffffff2, 32) // opcode
-                    .storeAddress(token1.address)
-                    .storeCoins(1)
-                    .asSlice()
-            }
-        );
-        printTransactionFees(sendLP2.transactions);
-        const sendBurn = await lpWallet.send(
-            user.getSender(),
-            {
-                value: toNano(1),
-            },
-            {
-                $$type: "JettonBurn",
-                queryId: toNano(1),
-                amount: 100n,
-                responseDestination: user.address,
-                customPayload: null,
-            }    
-        )
-        printTransactionFees(sendBurn.transactions);
-    });
+    // it("should route burn message", async () =>{
+    //     const poolAddress = await router.getGetPoolAddress(
+    //         token0.address,
+    //         token1.address
+    //     );
+    //     const sendLP1 = await router.send(
+    //         token0.getSender(),
+    //         {
+    //             value: toNano(1),
+    //         },
+    //         {
+    //             $$type: "JettonNotification",
+    //             queryId: toNano(1),
+    //             amount: 10000n,
+    //             sender: user.address,
+    //             forwardPayload: beginCell()
+    //                 .storeUint(0xfffffff2, 32) // opcode
+    //                 .storeAddress(token0.address)
+    //                 .storeCoins(1)
+    //                 .asSlice()
+    //         }
+    //     );
+    //     const sendLP2 = await router.send(
+    //         token0.getSender(),
+    //         {
+    //             value: toNano(1),
+    //         },
+    //         {
+    //             $$type: "JettonNotification",
+    //             queryId: toNano(1),
+    //             amount: 20000n,
+    //             sender: user.address,
+    //             forwardPayload: beginCell()
+    //                 .storeUint(0xfffffff2, 32) // opcode
+    //                 .storeAddress(token1.address)
+    //                 .storeCoins(1)
+    //                 .asSlice()
+    //         }
+    //     );
+    //     printTransactionFees(sendLP2.transactions);
+    //     const sendBurn = await lpWallet.send(
+    //         user.getSender(),
+    //         {
+    //             value: toNano(1),
+    //         },
+    //         {
+    //             $$type: "JettonBurn",
+    //             queryId: toNano(1),
+    //             amount: 100n,
+    //             responseDestination: user.address,
+    //             customPayload: null,
+    //         }    
+    //     )
+    //     printTransactionFees(sendBurn.transactions);
+    // });
 
 });

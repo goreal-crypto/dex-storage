@@ -37,7 +37,7 @@ fun nextVirtualTick(tickCurrent: Int, tickSpacing: Int, zeroForOne: Bool): Int {
     if (zeroForOne) {
         return (compressed - (compressed % 256)) * tickSpacing;
     } 
-    return (compressed + 1 + (255 - ((compressed + 1) % 256))) * tickSpacing;
+    return (compressed + 256 - ((compressed + 1) % 256)) * tickSpacing;
 }
 
 fun nextInitializedTick(

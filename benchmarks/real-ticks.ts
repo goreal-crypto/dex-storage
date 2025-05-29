@@ -8,9 +8,9 @@ import { randomInt } from "crypto";
 
 const main = async () => {
     const NUM_SAMPLES = 50; 
-    const TICK_SPACING = 100n; 
+    const TICK_SPACING = 256n; 
     const MAX_TICKS = 30; 
-    let liquidity = 10n ** 10n;
+    let liquidity = 10n ** 12n;
     let results: {mean: number[], variance: number[]} = {
         mean: [],
         variance: []
@@ -113,7 +113,7 @@ const main = async () => {
                     queryId: 0n,
                     userAddress: user.address,
                     zeroForOne: false,
-                    amountSpecified: 50000000000000n,
+                    amountSpecified: 10n ** 18n,
                     sqrtPriceLimitX96: await tickMathTest.getGetSqrtRatioAtTick(BigInt(lastRangeUpper))
                 }
             );

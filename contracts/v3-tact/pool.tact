@@ -318,10 +318,10 @@ extends mutates fun update(
     }
     if (liquidity < 0) {
         if (flippedLower) {
-            self.data.del(tickLower);
+            let _ = self.data.del(tickLower);
         }
         if (flippedUpper) {
-            self.data.del(tickUpper);
+            let _ = self.data.del(tickUpper);
         }
     }
 }
