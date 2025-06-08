@@ -310,12 +310,10 @@ describe("V3Pool", () => {
                 }
             );
             console.log(await pool.getGetPoolState())
-            // Получаем обновленные данные
             const lowerTick = await pool.getGetTicks(-500n);
             const upperTick = await pool.getGetTicks(500n);
             const poolState = await pool.getGetPoolState();
             
-            // Проверяем обновление feeGrowthOutside
             // if (poolState.tick >= -500n) {
                 expect(lowerTick?.feeGrowthOutside0X128)
                     .toBe(poolState.feeGrowthGlobal0X128 - lowerTick!.feeGrowthOutside0X128);

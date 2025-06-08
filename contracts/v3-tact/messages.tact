@@ -87,6 +87,12 @@ message(11) PositionInit {
     feeGrowthInside1X128: Int as uint256;
 }
 
+message(12) PoolInitialize {
+    queryId: Int as uint64;
+    token0Address: Address;
+    token1Address: Address;
+    sqrtPriceX96: Int as uint160;
+}
 
 // ============================================================
 // Jetton messages

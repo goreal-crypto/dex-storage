@@ -1,7 +1,11 @@
 import "./pool";
 import "../base-tact/gas";
+import "./messages";
 
-contract Router {
+contract Router (
+    adminAddress: Address,
+) {
+
     receive(msg: PayTo) {
         let gasRequired = getGasFee(20000, WORKCHAIN); 
         let msgValue = context().value;
@@ -59,7 +63,7 @@ contract Router {
         let token1Address: Address = payload.loadAddress();
         let ctx: Context = context();
         let fwdFee = ctx.readForwardFee();
-        if ((fwdFee * 6 > ctx.value) || token1Address == ctx.sender || self.isLocked) {
+        if ((fwdFee * 6 > ctx.value) || token1Address == ctx.sender) {
             message(MessageParameters{
                 to: ctx.sender,
                 value: 0,
@@ -85,6 +89,7 @@ contract Router {
                     mode: SendRemainingValue,
                     bounce: false,
                     body: Swap {
+                        queryId: msg.queryId,
                         userAddress: msg.sender,
                         zeroForOne: ctx.sender.asSlice().hash() > token1Address.asSlice().hash(),
                         amountSpecified: msg.amount,
@@ -93,47 +98,106 @@ contract Router {
                 });
             } else if (opcode == PROVIDE_LP) {
                 let poolInit: StateInit = getPoolStateInit(ctx.sender, token1Address);
+                let poolAddress = contractAddress(poolInit);
                 let enough0 = payload.loadCoins();
                 let enough1 = payload.loadCoins();
                 let liquidity = payload.loadUint(128);
-                let lowerTick = payload.loadInt(24);
-                let upperTick = payload.loadInt(24);
+                let tickLower = payload.loadInt(24);
+                let tickUpper = payload.loadInt(24);
                 if (ctx.sender.asSlice().hash() > token1Address.asSlice().hash()) {
-                    deploy(DeployParameters{
-                        init: poolInit,
+                    message(MessageParameters{
+                        to: poolAddress,
                         value: 0,
                         mode: SendRemainingValue,
                         bounce: false,
                         body: ProvideLiquidity {
+                            queryId: msg.queryId,
                             userAddress: msg.sender,
-                            amount0: msg.amount, 
+                            amount0: msg.amount,
                             amount1: 0,
                             enough0: enough0,
                             enough1: enough1,
                             liquidity: liquidity,
-                            lowerTick: lowerTick,
-                            upperTick: upperTick,
+                            tickLower: tickLower,
+                            tickUpper: tickUpper,
                         }.toCell()
                     }); 
                 } else {
-                    deploy(DeployParameters{
-                        init: poolInit,
+                    message(MessageParameters{
+                        to: poolAddress,
                         value: 0,
                         mode: SendRemainingValue,
                         bounce: false,
-                        body: ProvideLiquidity {
+                        body: ProvideLiquidity{
+                            queryId: msg.queryId,
                             userAddress: msg.sender,
-                            amount0: 0, 
-                            amount1: msg.amount,
+                            amount0: 0,
+                            amount1: 1,
                             enough0: enough0,
                             enough1: enough1,
                             liquidity: liquidity,
-                            lowerTick: lowerTick,
-                            upperTick: upperTick,
+                            tickLower: tickLower,
+                            tickUpper: tickUpper,
                         }.toCell()
                     }); 
                 }  
             }
         }
     }
+
+    receive(msg: PoolInitialize) {
+        throwUnless(WRONG_CALLER, sender() == self.adminAddress);
+        let poolInit = getPoolStateInit(msg.token0Address, msg.token1Address);
+        deploy(DeployParameters {
+            init: poolInit,
+            value: 0,
+            mode: SendRemainingValue,
+            bounce: false,
+            body: Initialize {
+                queryId: msg.queryId,
+                sqrtPriceX96: msg.sqrtPriceX96,
+            }.toCell()
+        });        
+    }
+
+    get fun poolAddress(token0Address: Address, token1Address: Address): Address {
+        return getPoolAddress(token0Address, token1Address);
+    }
+}
+
+inline fun getPoolAddress(token0Address: Address, token1Address: Address): Address {
+    return contractAddress(getPoolStateInit(token0Address, token1Address));
+}
+
+inline fun getPoolStateInit(token0Address: Address, token1Address: Address): StateInit {
+    if (token0Address.asSlice().hash() > token1Address.asSlice().hash()) {
+        return initOf Pool(
+            myAddress(),
+            token0Address,
+            token1Address,
+            0,
+            0,
+            0,
+            TicksMap {data: emptyMap()},
+            1,
+            1,
+            0,
+            0,
+            100
+        );
+    }
+    return initOf Pool(
+        myAddress(),
+        token1Address,
+        token0Address,
+        0,
+        0,
+        0,
+        TicksMap {data: emptyMap()},
+        1,
+        1,
+        0,
+        0,
+        100
+    );
 }
